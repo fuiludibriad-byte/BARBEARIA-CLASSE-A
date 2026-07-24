@@ -564,9 +564,45 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
   };
 
   // Finalize → move to completed, free time slot
-  const handleFinalize = (booking: Booking) => {
-    const updatedBooking = { ...booking, status: 'completed' as const };
-    addCompleted(booking);
+  const handleFinalize = async (booking: Booking) => {
+    let finalBooking = { ...booking, status: 'completed' as const };
+    
+    // VERIFICAR ASSINATURA ANTES DE CONCLUIR
+    if (!booking.is_plan_usage) {
+      try {
+        const phone = booking.phone.replace(/\D/g, '');
+        const res = await fetch(`/api/finance?action=get_subscription&phone=${phone}`);
+        const data = await res.json();
+        
+        if (data.subscription) {
+           const sub = data.subscription;
+           const remaining = sub.total_cuts - sub.used_cuts;
+           const wantsToDeduct = window.confirm(`O cliente ${booking.name} possui o plano "${sub.plan_type}" ativo (${remaining} cortes restantes).\n\nDeseja abater este serviço do plano?`);
+           
+           if (wantsToDeduct) {
+              const deductRes = await fetch('/api/finance?action=deduct_plan', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ subscription_id: sub.id })
+              });
+              const deductData = await deductRes.json();
+              if (deductData.success) {
+                 finalBooking.is_plan_usage = true;
+                 finalBooking.price = 0;
+                 if (deductData.status === 'expired') {
+                   alert('Último corte do plano utilizado! Plano finalizado com sucesso.');
+                 } else {
+                   alert('1 corte abatido do plano com sucesso!');
+                 }
+              }
+           }
+        }
+      } catch (err) {
+        console.error('Erro ao verificar assinatura:', err);
+      }
+    }
+
+    addCompleted(finalBooking);
     const updated = bookings.filter(b => b.id !== booking.id);
     saveBookings(updated);
     setBookings(updated);
@@ -581,7 +617,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
       body: JSON.stringify({
         id: booking.id,
         type: 'booking',
-        booking: updatedBooking,
+        booking: finalBooking,
         duration: getBookingDuration(booking.service),
       }),
     })

@@ -126,6 +126,50 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ success: true });
     }
 
+    if (req.method === 'GET' && action === 'get_all_subscriptions') {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return res.status(200).json({ subscriptions: data });
+    }
+
+    if (req.method === 'POST' && action === 'deduct_plan') {
+      const { subscription_id } = req.body;
+      const { data: subData, error: fetchErr } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('id', subscription_id)
+        .single();
+      
+      if (fetchErr) throw fetchErr;
+      if (!subData) return res.status(404).json({ error: 'Subscription not found' });
+      
+      const newUsedCuts = subData.used_cuts + 1;
+      const newStatus = newUsedCuts >= subData.total_cuts ? 'expired' : subData.status;
+
+      const { error: updateErr } = await supabase
+        .from('subscriptions')
+        .update({ used_cuts: newUsedCuts, status: newStatus })
+        .eq('id', subscription_id);
+
+      if (updateErr) throw updateErr;
+      return res.status(200).json({ success: true, status: newStatus });
+    }
+
+    if (req.method === 'POST' && action === 'cancel_plan') {
+      const { subscription_id } = req.body;
+      const { error } = await supabase
+        .from('subscriptions')
+        .update({ status: 'canceled' })
+        .eq('id', subscription_id);
+      
+      if (error) throw error;
+      return res.status(200).json({ success: true });
+    }
+
     return res.status(404).json({ error: 'Action not found' });
   } catch (err: any) {
     console.error('Finance API error:', err);
