@@ -1,27 +1,61 @@
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { BARBERS, ClientSubscription, Booking } from '@/lib/types';
-import { DollarSign, UserCheck, Scissors, Search, Loader2 } from 'lucide-react';
+import { BARBERS, Subscription, Booking, BarberCommission } from '@/lib/types';
+import { DollarSign, UserCheck, Scissors, Loader2, Save } from 'lucide-react';
 
 export default function FinanceTab() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<{ appointments: Booking[]; subscriptions: ClientSubscription[] }>({ appointments: [], subscriptions: [] });
+  const [data, setData] = useState<{ appointments: Booking[]; subscriptions: Subscription[] }>({ appointments: [], subscriptions: [] });
+  const [commissionsDb, setCommissionsDb] = useState<BarberCommission[]>([]);
+  const [editedCommissions, setEditedCommissions] = useState<Record<string, number>>({});
+  const [savingCommission, setSavingCommission] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchFinance = () => {
     setLoading(true);
-    fetch(`/api/finance?action=finance_report&period=${period}`)
-      .then(res => res.json())
-      .then(resData => {
+    Promise.all([
+      fetch(`/api/finance?action=finance_report&period=${period}`).then(res => res.json()),
+      fetch('/api/finance?action=get_commissions').then(res => res.json())
+    ])
+      .then(([reportRes, commRes]) => {
         setData({
-          appointments: resData.appointments || [],
-          subscriptions: resData.subscriptions || []
+          appointments: reportRes.appointments || [],
+          subscriptions: reportRes.subscriptions || []
         });
+        setCommissionsDb(commRes.commissions || []);
+        
+        const initialEdits: Record<string, number> = {};
+        (commRes.commissions || []).forEach((c: BarberCommission) => {
+          initialEdits[c.barber_id] = c.commission_percentage;
+        });
+        setEditedCommissions(initialEdits);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchFinance();
   }, [period]);
+
+  const handleSaveCommission = async (barberId: string, barberName: string) => {
+    const val = editedCommissions[barberId];
+    if (val === undefined) return;
+    
+    setSavingCommission(barberId);
+    try {
+      await fetch('/api/finance?action=update_commission', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ barber_id: barberId, barber_name: barberName, commission_percentage: val })
+      });
+      // Re-fetch para atualizar local
+      fetchFinance();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSavingCommission(null);
+    }
+  };
 
   const calculateFinance = () => {
     let grossTotal = 0;
@@ -31,15 +65,22 @@ export default function FinanceTab() {
     // Inicializa barbeiros
     BARBERS.forEach(b => netBarbers[b.id] = 0);
 
-    // Soma agendamentos
+    const getBarberCommissionRate = (barberId: string) => {
+      const dbRate = commissionsDb.find(c => c.barber_id === barberId)?.commission_percentage;
+      return dbRate !== undefined ? dbRate / 100 : 0.5; // fallback to 50%
+    };
+
+    // Soma agendamentos (apenas serviços avulsos, pois se for plano, a grana já entrou na venda do plano)
     data.appointments.forEach(app => {
-      // @ts-ignore
-      const price = parseFloat(app.price) || 0;
+      if (app.is_plan_usage) return; // Se foi pago com plano, o valor entrou na venda do plano, não agora
+      
+      const price = Number(app.price) || 0;
       grossTotal += price;
       
       const barber = BARBERS.find(b => b.id === app.barberId);
       if (barber && price > 0) {
-        const commission = price * barber.serviceCommissionRate;
+        const rate = getBarberCommissionRate(barber.id);
+        const commission = price * rate;
         netBarbers[barber.id] += commission;
         totalCommissions += commission;
       }
@@ -47,13 +88,13 @@ export default function FinanceTab() {
 
     // Soma assinaturas vendidas
     data.subscriptions.forEach(sub => {
-      // @ts-ignore
-      const price = parseFloat(sub.price) || 0;
+      const price = Number(sub.price) || 0;
       grossTotal += price;
 
-      const barber = BARBERS.find(b => b.id === sub.sold_by);
+      const barber = BARBERS.find(b => b.id === sub.barber_id);
       if (barber && price > 0) {
-        const commission = price * barber.planCommissionRate;
+        const rate = getBarberCommissionRate(barber.id);
+        const commission = price * rate;
         netBarbers[barber.id] += commission;
         totalCommissions += commission;
       }
@@ -120,20 +161,41 @@ export default function FinanceTab() {
           </div>
 
           <div className="bg-card border border-border p-6 rounded-2xl lg:col-span-1 md:col-span-2">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <UserCheck className="w-5 h-5 text-primary" />
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <UserCheck className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="font-semibold text-muted-foreground">Repasses e Ajuste de %</h3>
               </div>
-              <h3 className="font-semibold text-muted-foreground">Repasses por Barbeiro</h3>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {BARBERS.map(b => (
-                <div key={b.id} className="flex justify-between items-center border-b border-border pb-2 last:border-0 last:pb-0">
-                  <div className="flex items-center gap-2">
-                    <img src={b.image} alt={b.name} className="w-6 h-6 rounded-full object-cover" />
-                    <span className="text-sm font-medium">{b.name}</span>
+                <div key={b.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-border pb-3 last:border-0 last:pb-0 gap-3">
+                  <div className="flex items-center gap-3">
+                    <img src={b.image} alt={b.name} className="w-10 h-10 rounded-full object-cover" />
+                    <div>
+                      <span className="text-sm font-bold block">{b.name}</span>
+                      <span className="text-xs text-muted-foreground">Repasse Acumulado: R$ {(netBarbers[b.id] || 0).toFixed(2)}</span>
+                    </div>
                   </div>
-                  <span className="font-bold">R$ {(netBarbers[b.id] || 0).toFixed(2)}</span>
+                  <div className="flex items-center gap-2 bg-secondary p-1 rounded-lg">
+                    <input 
+                      type="number"
+                      value={editedCommissions[b.id] ?? 50}
+                      onChange={(e) => setEditedCommissions({...editedCommissions, [b.id]: Number(e.target.value)})}
+                      className="w-16 bg-background border border-border text-center rounded-md p-1 text-sm outline-none"
+                    />
+                    <span className="text-sm text-muted-foreground">%</span>
+                    <button 
+                      onClick={() => handleSaveCommission(b.id, b.name)}
+                      disabled={savingCommission === b.id}
+                      className="p-2 text-primary hover:bg-primary/10 rounded-md transition-colors"
+                      title="Salvar % de Comissão"
+                    >
+                      {savingCommission === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

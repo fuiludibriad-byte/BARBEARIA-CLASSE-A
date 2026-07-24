@@ -20,12 +20,12 @@ export default function SubscriptionsTab() {
     if (!nome.trim() || !telefone.trim() || !selectedPlan) return;
 
     const payload = {
-      cliente_nome: nome.trim(),
-      cliente_telefone: telefone.replace(/\D/g, ''), // apenas numeros
-      plan_name: selectedPlan.name,
-      total_services: isCustom ? customServices : selectedPlan.totalServices,
+      client_name: nome.trim(),
+      client_phone: telefone.replace(/\D/g, ''), // apenas numeros
+      plan_type: isCustom ? 'custom' : (selectedPlan.name.toLowerCase().includes('quinzenal') ? 'quinzenal' : 'mensal'),
+      total_cuts: isCustom ? customServices : selectedPlan.totalServices,
       price: isCustom ? customPrice : selectedPlan.price,
-      sold_by: soldBy
+      barber_id: soldBy
     };
 
     setIsSubmitting(true);

@@ -76,18 +76,23 @@ export const BARBERS: Barber[] = [
   }
 ];
 
-export interface ClientSubscription {
+export interface Subscription {
   id: string;
-  cliente_nome: string;
-  cliente_telefone: string;
-  plan_name: string;
-  total_services: number;
-  services_used: number;
+  client_name: string;
+  client_phone: string;
+  plan_type: string;
+  total_cuts: number;
+  used_cuts: number;
+  barber_id: string;
   price: number;
-  sold_by: string | null;
-  status: 'active' | 'exhausted' | 'expired';
+  status: 'active' | 'expired' | 'canceled';
   created_at: string;
-  expires_at: string;
+}
+
+export interface BarberCommission {
+  barber_id: string;
+  barber_name: string;
+  commission_percentage: number;
 }
 
 export interface PlanOption {

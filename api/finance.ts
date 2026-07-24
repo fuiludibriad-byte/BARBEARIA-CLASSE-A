@@ -32,11 +32,10 @@ export default async function handler(req: any, res: any) {
 
       // Busca assinatura ativa
       const { data, error } = await supabase
-        .from('client_subscriptions')
+        .from('subscriptions')
         .select('*')
-        .eq('cliente_telefone', phone)
+        .eq('client_phone', phone)
         .eq('status', 'active')
-        .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
         .limit(1)
         .single();
@@ -44,9 +43,9 @@ export default async function handler(req: any, res: any) {
       if (error && error.code !== 'PGRST116') throw error; // PGRST116 é no rows found
       
       // Checa se os serviços esgotaram
-      if (data && data.services_used >= data.total_services) {
-        // Atualizar para exhausted
-        await supabase.from('client_subscriptions').update({ status: 'exhausted' }).eq('id', data.id);
+      if (data && data.used_cuts >= data.total_cuts) {
+        // Atualizar para expired
+        await supabase.from('subscriptions').update({ status: 'expired' }).eq('id', data.id);
         return res.status(200).json({ subscription: null });
       }
 
@@ -54,21 +53,18 @@ export default async function handler(req: any, res: any) {
     }
 
     if (req.method === 'POST' && action === 'create_subscription') {
-      const { cliente_nome, cliente_telefone, plan_name, total_services, price, sold_by } = req.body;
+      const { client_name, client_phone, plan_type, total_cuts, price, barber_id } = req.body;
       
-      const expires_at = new Date();
-      expires_at.setDate(expires_at.getDate() + 30); // 30 dias de validade
-
       const { data, error } = await supabase
-        .from('client_subscriptions')
+        .from('subscriptions')
         .insert({
-          cliente_nome,
-          cliente_telefone,
-          plan_name,
-          total_services,
+          client_name,
+          client_phone,
+          plan_type,
+          total_cuts,
+          used_cuts: 0,
           price,
-          sold_by,
-          expires_at: expires_at.toISOString(),
+          barber_id,
           status: 'active'
         })
         .select('*')
@@ -105,7 +101,7 @@ export default async function handler(req: any, res: any) {
 
       // Busca subscriptions
       const { data: subscriptions, error: subErr } = await supabase
-        .from('client_subscriptions')
+        .from('subscriptions')
         .select('*')
         .gte('created_at', startDateIso)
         .lte('created_at', endDateIso);
@@ -113,6 +109,21 @@ export default async function handler(req: any, res: any) {
       if (subErr) throw subErr;
 
       return res.status(200).json({ appointments, subscriptions });
+    }
+
+    if (req.method === 'GET' && action === 'get_commissions') {
+      const { data, error } = await supabase.from('barber_commissions').select('*');
+      if (error) throw error;
+      return res.status(200).json({ commissions: data });
+    }
+
+    if (req.method === 'POST' && action === 'update_commission') {
+      const { barber_id, barber_name, commission_percentage } = req.body;
+      const { error } = await supabase
+        .from('barber_commissions')
+        .upsert({ barber_id, barber_name, commission_percentage }, { onConflict: 'barber_id' });
+      if (error) throw error;
+      return res.status(200).json({ success: true });
     }
 
     return res.status(404).json({ error: 'Action not found' });

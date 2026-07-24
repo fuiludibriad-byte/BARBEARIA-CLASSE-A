@@ -696,19 +696,20 @@ export default async function handler(req: any, res: any) {
         // 1.5. Se for uso de plano, incrementar o uso
         if (booking.is_plan_usage && booking.phone) {
           const { data: subData, error: subErr } = await supabase
-            .from('client_subscriptions')
-            .select('id, services_used')
-            .eq('cliente_telefone', booking.phone)
+            .from('subscriptions')
+            .select('id, used_cuts, total_cuts')
+            .eq('client_phone', booking.phone)
             .eq('status', 'active')
-            .gt('expires_at', new Date().toISOString())
             .order('created_at', { ascending: false })
             .limit(1)
             .single();
           
           if (!subErr && subData) {
+            const newUsedCuts = subData.used_cuts + 1;
+            const newStatus = newUsedCuts >= subData.total_cuts ? 'expired' : 'active';
             await supabase
-              .from('client_subscriptions')
-              .update({ services_used: subData.services_used + 1 })
+              .from('subscriptions')
+              .update({ used_cuts: newUsedCuts, status: newStatus })
               .eq('id', subData.id);
           }
         }
