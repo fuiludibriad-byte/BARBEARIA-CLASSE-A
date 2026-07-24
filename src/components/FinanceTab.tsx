@@ -1,8 +1,36 @@
 import { useState, useEffect } from 'react';
 import { BARBERS, Subscription, Booking, BarberCommission } from '@/lib/types';
 import { DollarSign, UserCheck, Scissors, Loader2, Save } from 'lucide-react';
+import React from 'react';
 
-export default function FinanceTab() {
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
+  constructor(props: {children: React.ReactNode}) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ErrorBoundary caught an error in FinanceTab", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 text-center bg-destructive/10 text-destructive rounded-2xl m-4 border border-destructive/20">
+          <h2 className="text-xl font-bold mb-2">Ops! Erro ao carregar o Financeiro.</h2>
+          <p className="text-sm opacity-80">Por favor, recarregue a página ou avise o suporte.</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function FinanceTabContent() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<{ appointments: Booking[]; subscriptions: Subscription[] }>({ appointments: [], subscriptions: [] });
@@ -207,5 +235,13 @@ export default function FinanceTab() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function FinanceTab() {
+  return (
+    <ErrorBoundary>
+      <FinanceTabContent />
+    </ErrorBoundary>
   );
 }

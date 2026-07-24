@@ -3,8 +3,36 @@ import { BARBERS, PLAN_OPTIONS, Subscription } from '@/lib/types';
 import { Gift, CheckCircle, Loader2, Search, Trash2, Minus, CalendarX2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import React from 'react';
 
-export default function SubscriptionsTab() {
+class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
+  constructor(props: {children: React.ReactNode}) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 text-center bg-destructive/10 text-destructive rounded-2xl m-4 border border-destructive/20">
+          <h2 className="text-xl font-bold mb-2">Ops! Algo deu errado ao carregar os Planos.</h2>
+          <p className="text-sm opacity-80">Por favor, recarregue a página ou avise o suporte.</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function SubscriptionsTabContent() {
   const [nome, setNome] = useState('');
   const [telefone, setTelefone] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState<string>(PLAN_OPTIONS[0].id);
@@ -119,7 +147,7 @@ export default function SubscriptionsTab() {
     if (filterStatus !== 'all' && s.status !== filterStatus) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return s.client_name.toLowerCase().includes(q) || s.client_phone.includes(q);
+      return (s.client_name || '').toLowerCase().includes(q) || (s.client_phone || '').includes(q);
     }
     return true;
   });
@@ -285,14 +313,14 @@ export default function SubscriptionsTab() {
                 <div key={sub.id} className={`p-5 rounded-2xl border transition-all ${isActive ? 'bg-card border-primary/20' : 'bg-secondary/50 border-border opacity-70'}`}>
                   <div className="flex justify-between items-start mb-4">
                     <div>
-                      <h3 className="font-bold text-lg text-foreground">{sub.client_name}</h3>
+                      <h3 className="font-bold text-lg text-foreground">{sub.client_name || 'Cliente'}</h3>
                       <a 
-                        href={`https://wa.me/${sub.client_phone}`}
+                        href={`https://wa.me/${sub.client_phone || ''}`}
                         target="_blank"
                         rel="noreferrer"
                         className="text-sm text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 mt-0.5"
                       >
-                        {sub.client_phone}
+                        {sub.client_phone || 'Sem telefone'}
                       </a>
                     </div>
                     {isActive && <span className="bg-primary/20 text-primary px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide">Ativo</span>}
@@ -301,9 +329,9 @@ export default function SubscriptionsTab() {
                   </div>
 
                   <div className="space-y-1 mb-4">
-                    <p className="text-sm"><span className="text-muted-foreground">Plano:</span> <span className="font-medium capitalize">{sub.plan_type}</span></p>
+                    <p className="text-sm"><span className="text-muted-foreground">Plano:</span> <span className="font-medium capitalize">{sub.plan_type || 'Customizado'}</span></p>
                     <p className="text-sm"><span className="text-muted-foreground">Vendido por:</span> <span className="font-medium">{getBarberName(sub.barber_id)}</span></p>
-                    <p className="text-sm"><span className="text-muted-foreground">Início:</span> <span className="font-medium">{format(new Date(sub.created_at), "dd 'de' MMM, yyyy", { locale: ptBR })}</span></p>
+                    <p className="text-sm"><span className="text-muted-foreground">Início:</span> <span className="font-medium">{sub.created_at ? format(new Date(sub.created_at), "dd 'de' MMM, yyyy", { locale: ptBR }) : 'Data indisponível'}</span></p>
                   </div>
 
                   <div className="mb-4">
@@ -343,5 +371,13 @@ export default function SubscriptionsTab() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function SubscriptionsTab() {
+  return (
+    <ErrorBoundary>
+      <SubscriptionsTabContent />
+    </ErrorBoundary>
   );
 }
