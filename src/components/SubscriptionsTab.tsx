@@ -57,10 +57,10 @@ function SubscriptionsTabContent() {
     fetch('/api/finance?action=get_all_subscriptions')
       .then(res => res.json())
       .then(data => {
-        setSubscriptions(data.subscriptions || []);
+        setSubscriptions(Array.isArray(data.subscriptions) ? data.subscriptions : []);
       })
       .catch(err => {
-        console.error('Error fetching subscriptions:', err);
+        console.error('Erro Supabase Planos:', err);
         setSubscriptions([]);
       })
       .finally(() => setLoadingSubs(false));

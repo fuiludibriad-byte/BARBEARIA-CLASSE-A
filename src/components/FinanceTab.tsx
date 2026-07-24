@@ -46,10 +46,10 @@ function FinanceTabContent() {
     ])
       .then(([reportRes, commRes]) => {
         setData({
-          appointments: reportRes?.appointments || [],
-          subscriptions: reportRes?.subscriptions || []
+          appointments: Array.isArray(reportRes?.appointments) ? reportRes.appointments : [],
+          subscriptions: Array.isArray(reportRes?.subscriptions) ? reportRes.subscriptions : []
         });
-        setCommissionsDb(commRes?.commissions || []);
+        setCommissionsDb(Array.isArray(commRes?.commissions) ? commRes.commissions : []);
         
         const initialEdits: Record<string, number> = {};
         (commRes.commissions || []).forEach((c: BarberCommission) => {
@@ -58,7 +58,7 @@ function FinanceTabContent() {
         setEditedCommissions(initialEdits);
       })
       .catch(err => {
-        console.error('Error fetching finance data:', err);
+        console.error('Erro Supabase Financeiro/Planos:', err);
         setData({ appointments: [], subscriptions: [] });
         setCommissionsDb([]);
       })
