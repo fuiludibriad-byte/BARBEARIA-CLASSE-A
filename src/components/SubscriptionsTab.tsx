@@ -70,7 +70,7 @@ function SubscriptionsTabContent() {
     fetchSubscriptions();
   }, []);
 
-  const handleSell = () => {
+  const handleSell = async () => {
     if (!nome.trim() || !telefone.trim() || !selectedPlan) return;
 
     const payload = {
@@ -83,23 +83,35 @@ function SubscriptionsTabContent() {
     };
 
     setIsSubmitting(true);
-    fetch('/api/finance?action=create_subscription', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          setShowSuccess(true);
-          setNome('');
-          setTelefone('');
-          fetchSubscriptions();
-          setTimeout(() => setShowSuccess(false), 3000);
+    try {
+      const res = await fetch('/api/finance?action=create_subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      
+      if (data.success || res.ok) {
+        console.log("SUCESSO INSERT:", data);
+        setShowSuccess(true);
+        setNome('');
+        setTelefone('');
+        if (isCustom) {
+          setCustomPrice(0);
+          setCustomServices(1);
         }
-      })
-      .catch(console.error)
-      .finally(() => setIsSubmitting(false));
+        await fetchSubscriptions();
+        setTimeout(() => setShowSuccess(false), 3000);
+      } else {
+        console.error("ERRO INSERT API:", data);
+        alert("Erro ao inserir: " + (data.error || "Desconhecido"));
+      }
+    } catch (error) {
+      console.error("ERRO INSERT CATCH:", error);
+      alert("Erro ao conectar ao servidor.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDeduct = async (id: string) => {
