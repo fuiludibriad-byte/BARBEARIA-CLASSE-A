@@ -29,11 +29,12 @@ export default function SubscriptionsTab() {
     fetch('/api/finance?action=get_all_subscriptions')
       .then(res => res.json())
       .then(data => {
-        if (data.subscriptions) {
-          setSubscriptions(data.subscriptions);
-        }
+        setSubscriptions(data.subscriptions || []);
       })
-      .catch(console.error)
+      .catch(err => {
+        console.error('Error fetching subscriptions:', err);
+        setSubscriptions([]);
+      })
       .finally(() => setLoadingSubs(false));
   };
 
@@ -114,7 +115,7 @@ export default function SubscriptionsTab() {
     }
   };
 
-  const filteredSubscriptions = subscriptions.filter(s => {
+  const filteredSubscriptions = (subscriptions || []).filter(s => {
     if (filterStatus !== 'all' && s.status !== filterStatus) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -278,7 +279,7 @@ export default function SubscriptionsTab() {
               const isActive = sub.status === 'active';
               const isExpired = sub.status === 'expired';
               const isCanceled = sub.status === 'canceled';
-              const progress = (sub.used_cuts / sub.total_cuts) * 100;
+              const progress = ((sub.used_cuts || 0) / (sub.total_cuts || 1)) * 100;
 
               return (
                 <div key={sub.id} className={`p-5 rounded-2xl border transition-all ${isActive ? 'bg-card border-primary/20' : 'bg-secondary/50 border-border opacity-70'}`}>
@@ -308,7 +309,7 @@ export default function SubscriptionsTab() {
                   <div className="mb-4">
                     <div className="flex justify-between text-xs font-bold mb-1.5">
                       <span className="text-muted-foreground">Cortes Utilizados</span>
-                      <span className={isActive ? 'text-primary' : 'text-muted-foreground'}>{sub.used_cuts} / {sub.total_cuts}</span>
+                      <span className={isActive ? 'text-primary' : 'text-muted-foreground'}>{sub.used_cuts || 0} / {sub.total_cuts || 1}</span>
                     </div>
                     <div className="w-full bg-secondary h-2.5 rounded-full overflow-hidden">
                       <div 

@@ -18,10 +18,10 @@ export default function FinanceTab() {
     ])
       .then(([reportRes, commRes]) => {
         setData({
-          appointments: reportRes.appointments || [],
-          subscriptions: reportRes.subscriptions || []
+          appointments: reportRes?.appointments || [],
+          subscriptions: reportRes?.subscriptions || []
         });
-        setCommissionsDb(commRes.commissions || []);
+        setCommissionsDb(commRes?.commissions || []);
         
         const initialEdits: Record<string, number> = {};
         (commRes.commissions || []).forEach((c: BarberCommission) => {
@@ -29,7 +29,11 @@ export default function FinanceTab() {
         });
         setEditedCommissions(initialEdits);
       })
-      .catch(console.error)
+      .catch(err => {
+        console.error('Error fetching finance data:', err);
+        setData({ appointments: [], subscriptions: [] });
+        setCommissionsDb([]);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -71,7 +75,7 @@ export default function FinanceTab() {
     };
 
     // Soma agendamentos (apenas serviços avulsos, pois se for plano, a grana já entrou na venda do plano)
-    data.appointments.forEach(app => {
+    (data.appointments || []).forEach(app => {
       if (app.is_plan_usage) return; // Se foi pago com plano, o valor entrou na venda do plano, não agora
       
       const price = Number(app.price) || 0;
@@ -87,7 +91,7 @@ export default function FinanceTab() {
     });
 
     // Soma assinaturas vendidas
-    data.subscriptions.forEach(sub => {
+    (data.subscriptions || []).forEach(sub => {
       const price = Number(sub.price) || 0;
       grossTotal += price;
 
