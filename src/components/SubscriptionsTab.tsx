@@ -120,7 +120,8 @@ function SubscriptionsTabContent() {
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error: any) {
       console.error("ERRO INSERT CATCH:", error);
-      toast.error("Erro ao inserir: " + (error?.message || "Erro ao conectar ao servidor."));
+      const isNetworkError = error?.message?.includes('Failed to fetch') || error?.message?.includes('NetworkError');
+      toast.error(isNetworkError ? "Erro de conexão. Verifique se o banco de dados está configurado corretamente." : "Não foi possível vender o plano. Tente novamente.");
     } finally {
       setIsSubmitting(false);
     }
