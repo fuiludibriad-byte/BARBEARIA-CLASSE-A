@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BARBERS, PLAN_OPTIONS, Subscription } from '@/lib/types';
-import { Gift, CheckCircle, Loader2, Search, Trash2, Minus, CalendarX2 } from 'lucide-react';
+import { Gift, CheckCircle, Loader2, Search, Trash2, Minus, CalendarX2, UserCheck } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import React from 'react';
