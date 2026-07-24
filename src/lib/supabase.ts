@@ -1,7 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+const getEnv = (key: string) => {
+  if (typeof process !== 'undefined' && process.env && process.env[key]) return process.env[key];
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) return import.meta.env[key];
+  return '';
+};
+
+let supabaseUrl = getEnv('VITE_SUPABASE_URL') || getEnv('SUPABASE_URL') || '';
+const supabaseKey = getEnv('VITE_SUPABASE_ANON_KEY') || getEnv('SUPABASE_SERVICE_ROLE_KEY') || getEnv('SUPABASE_ANON_KEY') || '';
+
+if (supabaseUrl && !supabaseUrl.startsWith('http') && !supabaseUrl.includes('SUA_CHAVE_AQUI')) {
+  supabaseUrl = 'https://' + supabaseUrl;
+}
 
 // Validação robusta de URL
 const isValidUrl = (url: string) => {
@@ -23,7 +34,7 @@ const isValidKey = (key: string) => {
 
 export const isDbConfigured = isValidUrl(supabaseUrl) && isValidKey(supabaseKey);
 
-if (!isDbConfigured && process.env.NODE_ENV !== 'production') {
+if (!isDbConfigured) {
   console.warn("⚠️ Supabase Client Warning: URL ou Chave inválida/ausente. As chamadas ao banco falharão.");
 }
 

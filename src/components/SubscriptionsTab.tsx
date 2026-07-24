@@ -5,6 +5,7 @@ import { Gift, CheckCircle, Loader2, Search, Trash2, Minus, CalendarX2, UserChec
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import React from 'react';
+import { supabase } from '@/lib/supabase';
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
   constructor(props: {children: React.ReactNode}) {
@@ -53,18 +54,22 @@ function SubscriptionsTabContent() {
   const selectedPlan = PLAN_OPTIONS.find(p => p.id === selectedPlanId);
   const isCustom = selectedPlanId === 'plan-custom';
 
-  const fetchSubscriptions = () => {
+  const fetchSubscriptions = async () => {
     setLoadingSubs(true);
-    fetch('/api/finance?action=get_all_subscriptions')
-      .then(res => res.json())
-      .then(data => {
-        setSubscriptions(Array.isArray(data.subscriptions) ? data.subscriptions : []);
-      })
-      .catch(err => {
-        console.error('Erro Supabase Planos:', err);
-        setSubscriptions([]);
-      })
-      .finally(() => setLoadingSubs(false));
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setSubscriptions(data || []);
+    } catch (err) {
+      console.error('Erro Supabase Planos:', err);
+      setSubscriptions([]);
+    } finally {
+      setLoadingSubs(false);
+    }
   };
 
   useEffect(() => {
@@ -85,31 +90,37 @@ function SubscriptionsTabContent() {
 
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/finance?action=create_subscription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .insert({
+          client_name: payload.client_name,
+          client_phone: payload.client_phone,
+          plan_type: payload.plan_type,
+          total_cuts: payload.total_cuts,
+          used_cuts: 0,
+          price: payload.price,
+          barber_id: payload.barber_id,
+          status: 'active'
+        })
+        .select('*')
+        .single();
       
-      if (data.success || res.ok) {
-        console.log("SUCESSO INSERT:", data);
-        setShowSuccess(true);
-        setNome('');
-        setTelefone('');
-        if (isCustom) {
-          setCustomPrice(0);
-          setCustomServices(1);
-        }
-        await fetchSubscriptions();
-        setTimeout(() => setShowSuccess(false), 3000);
-      } else {
-        console.error("ERRO INSERT API:", data);
-        toast.error("Erro ao inserir: " + (data.error || "Desconhecido"));
+      if (error) throw error;
+
+      console.log("SUCESSO INSERT:", data);
+      setShowSuccess(true);
+      setNome('');
+      setTelefone('');
+      if (isCustom) {
+        setCustomPrice(0);
+        setCustomServices(1);
       }
-    } catch (error) {
+      toast.success("Plano vendido com sucesso!");
+      await fetchSubscriptions();
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (error: any) {
       console.error("ERRO INSERT CATCH:", error);
-      toast.error("Erro ao conectar ao servidor.");
+      toast.error("Erro ao inserir: " + (error?.message || "Erro ao conectar ao servidor."));
     } finally {
       setIsSubmitting(false);
     }
@@ -118,24 +129,28 @@ function SubscriptionsTabContent() {
   const handleDeduct = async (id: string) => {
     setProcessingId(id);
     try {
-      const res = await fetch('/api/finance?action=deduct_plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription_id: id })
-      });
-      const data = await res.json();
-      if (data.success) {
-        if (data.status === 'expired') {
-          toast.success('Último corte utilizado! Plano finalizado com sucesso.');
-        } else {
-          toast.success('1 corte abatido do plano com sucesso!');
-        }
-        fetchSubscriptions();
+      const sub = subscriptions.find(s => s.id === id);
+      if (!sub) return;
+
+      const newUsedCuts = (sub.used_cuts || 0) + 1;
+      const newStatus = newUsedCuts >= (sub.total_cuts || 1) ? 'expired' : 'active';
+
+      const { error } = await supabase
+        .from('subscriptions')
+        .update({ used_cuts: newUsedCuts, status: newStatus })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      if (newStatus === 'expired') {
+        toast.success('Último corte utilizado! Plano finalizado com sucesso.');
       } else {
-        toast.error('Erro ao abater corte: ' + (data.error || 'Desconhecido'));
+        toast.success('1 corte abatido do plano com sucesso!');
       }
-    } catch (err) {
+      await fetchSubscriptions();
+    } catch (err: any) {
       console.error(err);
+      toast.error('Erro ao abater corte: ' + (err?.message || 'Desconhecido'));
     } finally {
       setProcessingId(null);
     }
@@ -145,19 +160,18 @@ function SubscriptionsTabContent() {
     if (!confirm('Tem certeza que deseja cancelar e apagar este plano?')) return;
     setProcessingId(id);
     try {
-      const res = await fetch('/api/finance?action=cancel_plan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscription_id: id })
-      });
-      if (res.ok) {
-        toast.success('Plano cancelado com sucesso.');
-        fetchSubscriptions();
-      } else {
-        toast.error('Erro ao cancelar o plano.');
-      }
+      const { error } = await supabase
+        .from('subscriptions')
+        .update({ status: 'canceled' })
+        .eq('id', id);
+        
+      if (error) throw error;
+
+      toast.success('Plano cancelado com sucesso.');
+      await fetchSubscriptions();
     } catch (err) {
       console.error(err);
+      toast.error('Erro ao cancelar o plano.');
     } finally {
       setProcessingId(null);
     }
