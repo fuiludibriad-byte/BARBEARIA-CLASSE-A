@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import { BARBERS, PLAN_OPTIONS, Subscription } from '@/lib/types';
 import { Gift, CheckCircle, Loader2, Search, Trash2, Minus, CalendarX2, UserCheck } from 'lucide-react';
 import { format } from 'date-fns';
@@ -104,11 +105,11 @@ function SubscriptionsTabContent() {
         setTimeout(() => setShowSuccess(false), 3000);
       } else {
         console.error("ERRO INSERT API:", data);
-        alert("Erro ao inserir: " + (data.error || "Desconhecido"));
+        toast.error("Erro ao inserir: " + (data.error || "Desconhecido"));
       }
     } catch (error) {
       console.error("ERRO INSERT CATCH:", error);
-      alert("Erro ao conectar ao servidor.");
+      toast.error("Erro ao conectar ao servidor.");
     } finally {
       setIsSubmitting(false);
     }
@@ -125,9 +126,13 @@ function SubscriptionsTabContent() {
       const data = await res.json();
       if (data.success) {
         if (data.status === 'expired') {
-          alert('Último corte utilizado! Plano finalizado com sucesso.');
+          toast.success('Último corte utilizado! Plano finalizado com sucesso.');
+        } else {
+          toast.success('1 corte abatido do plano com sucesso!');
         }
         fetchSubscriptions();
+      } else {
+        toast.error('Erro ao abater corte: ' + (data.error || 'Desconhecido'));
       }
     } catch (err) {
       console.error(err);
@@ -146,7 +151,10 @@ function SubscriptionsTabContent() {
         body: JSON.stringify({ subscription_id: id })
       });
       if (res.ok) {
+        toast.success('Plano cancelado com sucesso.');
         fetchSubscriptions();
+      } else {
+        toast.error('Erro ao cancelar o plano.');
       }
     } catch (err) {
       console.error(err);

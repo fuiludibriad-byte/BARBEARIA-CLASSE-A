@@ -590,9 +590,9 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                  finalBooking.is_plan_usage = true;
                  finalBooking.price = 0;
                  if (deductData.status === 'expired') {
-                   alert('Último corte do plano utilizado! Plano finalizado com sucesso.');
+                   toast.success('Último corte do plano utilizado! Plano finalizado com sucesso.');
                  } else {
-                   alert('1 corte abatido do plano com sucesso!');
+                   toast.success('1 corte abatido do plano com sucesso!');
                  }
               }
            }

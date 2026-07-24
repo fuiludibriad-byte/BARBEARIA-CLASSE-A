@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { createClient } from '@supabase/supabase-js';
+import { supabase, isDbConfigured } from '../src/lib/supabase';
 
 // Configuração do Google Auth com a Service Account
 const auth = new google.auth.GoogleAuth({
@@ -11,16 +11,6 @@ const auth = new google.auth.GoogleAuth({
 });
 
 const calendar = google.calendar({ version: 'v3', auth });
-
-// Configuração do Supabase Client
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const isDbConfigured = !!(supabaseUrl && !supabaseUrl.includes('SUA_CHAVE_AQUI') && supabaseKey && !supabaseKey.includes('SUA_CHAVE_AQUI'));
-
-const supabase = createClient(
-  isDbConfigured ? supabaseUrl : 'https://placeholder-project.supabase.co',
-  isDbConfigured ? supabaseKey : 'placeholder-key'
-);
 
 // Função para buscar o ID da agenda dinâmica do estúdio no Supabase
 async function getDynamicCalendarId(): Promise<string> {
@@ -673,6 +663,34 @@ export default async function handler(req: any, res: any) {
         }
         // --- END CHECK DOUBLE BOOKING ---
 
+        // --- ABATE AUTOMÁTICO DE PLANOS (BLINDAGEM) ---
+        let finalIsPlanUsage = booking.is_plan_usage || false;
+        let finalPrice = booking.price || 0;
+        let subDataToDeduct = null;
+
+        if (booking.phone) {
+          try {
+            // Busca se o cliente tem um plano ativo
+            const { data: subData, error: subErr } = await supabase
+              .from('subscriptions')
+              .select('id, used_cuts, total_cuts, plan_type')
+              .eq('client_phone', booking.phone.replace(/\D/g, ''))
+              .eq('status', 'active')
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (!subErr && subData && subData.used_cuts < subData.total_cuts) {
+              finalIsPlanUsage = true;
+              finalPrice = 0; // Abate do valor
+              subDataToDeduct = subData;
+            }
+          } catch (e) {
+            console.error("Erro na verificação automática de planos", e);
+          }
+        }
+        // ----------------------------------------------
+
         // 1. Inserir no Supabase primeiro
         const { error: insertErr } = await supabase
           .from('appointments')
@@ -687,37 +705,27 @@ export default async function handler(req: any, res: any) {
             status: booking.status || 'accepted',
             google_event_id: eventId,
             barber_id: booking.barberId || 'luiz',
-            price: booking.is_plan_usage ? 0 : (booking.price || 0),
-            is_plan_usage: booking.is_plan_usage || false
+            price: finalPrice,
+            is_plan_usage: finalIsPlanUsage
           });
 
         if (insertErr) throw insertErr;
 
-        // 1.5. Se for uso de plano, incrementar o uso
-        if (booking.is_plan_usage && booking.phone) {
-          const { data: subData, error: subErr } = await supabase
+        // 1.5. Realizar o desconto do corte na tabela subscriptions
+        if (subDataToDeduct) {
+          const newUsedCuts = subDataToDeduct.used_cuts + 1;
+          const newStatus = newUsedCuts >= subDataToDeduct.total_cuts ? 'expired' : 'active';
+          await supabase
             .from('subscriptions')
-            .select('id, used_cuts, total_cuts')
-            .eq('client_phone', booking.phone)
-            .eq('status', 'active')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-          
-          if (!subErr && subData) {
-            const newUsedCuts = subData.used_cuts + 1;
-            const newStatus = newUsedCuts >= subData.total_cuts ? 'expired' : 'active';
-            await supabase
-              .from('subscriptions')
-              .update({ used_cuts: newUsedCuts, status: newStatus })
-              .eq('id', subData.id);
-          }
+            .update({ used_cuts: newUsedCuts, status: newStatus })
+            .eq('id', subDataToDeduct.id);
         }
 
         // 2. Criar evento no Google Calendar para espelhamento
         const title = `${booking.service} - ${booking.name}`;
         const barberName = booking.barberId === 'vitinho' ? 'Vitinho' : 'Luiz';
-        const description = `Cliente: ${booking.name}\nContato: ${booking.phone}\nValor: R$ ${booking.price},00\nBarbeiro: ${barberName}`;
+        const planoText = finalIsPlanUsage ? '\n[Pago via Assinatura]' : '';
+        const description = `Cliente: ${booking.name}\nContato: ${booking.phone}\nValor: R$ ${finalPrice},00\nBarbeiro: ${barberName}${planoText}`;
 
         await calendar.events.insert({
           calendarId: activeCalendarId,
@@ -734,7 +742,7 @@ export default async function handler(req: any, res: any) {
                 service: booking.service,
                 name: booking.name,
                 phone: booking.phone,
-                price: String(booking.price),
+                price: String(finalPrice),
                 status: booking.status,
                 date: booking.date,
                 time: booking.time,
