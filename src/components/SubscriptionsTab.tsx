@@ -66,6 +66,7 @@ function SubscriptionsTabContent() {
       setSubscriptions(data || []);
     } catch (err) {
       console.error('Erro Supabase Planos:', err);
+      toast.dismiss(); // limpa qualquer toast bloqueante
       setSubscriptions([]);
     } finally {
       setLoadingSubs(false);
