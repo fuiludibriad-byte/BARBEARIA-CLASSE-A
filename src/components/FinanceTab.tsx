@@ -38,31 +38,39 @@ function FinanceTabContent() {
   const [editedCommissions, setEditedCommissions] = useState<Record<string, number>>({});
   const [savingCommission, setSavingCommission] = useState<string | null>(null);
 
-  const fetchFinance = () => {
+  const fetchFinance = async () => {
     setLoading(true);
-    Promise.all([
-      fetch(`/api/finance?action=finance_report&period=${period}`).then(res => res.json()),
-      fetch('/api/finance?action=get_commissions').then(res => res.json())
-    ])
-      .then(([reportRes, commRes]) => {
-        setData({
-          appointments: Array.isArray(reportRes?.appointments) ? reportRes.appointments : [],
-          subscriptions: Array.isArray(reportRes?.subscriptions) ? reportRes.subscriptions : []
-        });
-        setCommissionsDb(Array.isArray(commRes?.commissions) ? commRes.commissions : []);
-        
-        const initialEdits: Record<string, number> = {};
-        (commRes.commissions || []).forEach((c: BarberCommission) => {
-          initialEdits[c.barber_id] = c.commission_percentage;
-        });
-        setEditedCommissions(initialEdits);
-      })
-      .catch(err => {
-        console.error('Erro Supabase Financeiro/Planos:', err);
-        setData({ appointments: [], subscriptions: [] });
-        setCommissionsDb([]);
-      })
-      .finally(() => setLoading(false));
+    try {
+      const [reportRaw, commRaw] = await Promise.all([
+        fetch(`/api/finance?action=finance_report&period=${period}`),
+        fetch('/api/finance?action=get_commissions')
+      ]);
+
+      if (!reportRaw.ok || !commRaw.ok) {
+        throw new Error('Falha na comunicação com a API');
+      }
+
+      const reportRes = await reportRaw.json();
+      const commRes = await commRaw.json();
+
+      setData({
+        appointments: Array.isArray(reportRes?.appointments) ? reportRes.appointments : [],
+        subscriptions: Array.isArray(reportRes?.subscriptions) ? reportRes.subscriptions : []
+      });
+      setCommissionsDb(Array.isArray(commRes?.commissions) ? commRes.commissions : []);
+      
+      const initialEdits: Record<string, number> = {};
+      (commRes.commissions || []).forEach((c: BarberCommission) => {
+        initialEdits[c.barber_id] = c.commission_percentage;
+      });
+      setEditedCommissions(initialEdits);
+    } catch (err) {
+      console.error('Erro Supabase Financeiro/Planos:', err);
+      setData({ appointments: [], subscriptions: [] });
+      setCommissionsDb([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
