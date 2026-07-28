@@ -66,6 +66,15 @@ export const BARBERS: Barber[] = [
     planCommissionRate: 0.1
   },
   {
+    id: 'neco',
+    name: 'Neco',
+    role: 'barber',
+    image: 'https://ui-avatars.com/api/?name=Neco&background=random',
+    password: '8888',
+    serviceCommissionRate: 0.5,
+    planCommissionRate: 0.1
+  },
+  {
     id: 'dono',
     name: 'Jean (Dono)',
     role: 'owner',
