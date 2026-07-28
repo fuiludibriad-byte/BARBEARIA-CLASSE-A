@@ -120,9 +120,8 @@ function SubscriptionsTabContent() {
       await fetchSubscriptions();
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error: any) {
-      console.error("ERRO INSERT CATCH:", error);
-      const isNetworkError = error?.message?.includes('Failed to fetch') || error?.message?.includes('NetworkError');
-      toast.error(isNetworkError ? "Erro de conexão. Verifique se o banco de dados está configurado corretamente." : "Não foi possível vender o plano. Tente novamente.");
+      console.error("Detalhes do erro Supabase:", error);
+      toast.error(error.message || "Erro ao salvar assinatura");
     } finally {
       setIsSubmitting(false);
     }
