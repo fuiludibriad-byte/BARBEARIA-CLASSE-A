@@ -78,7 +78,13 @@ function SubscriptionsTabContent() {
   }, []);
 
   const handleSell = async () => {
-    if (!nome.trim() || !telefone.trim() || !selectedPlan) return;
+    console.log("Tentando salvar plano:", { clientName: nome, phone: telefone, selectedPlan, selectedBarber: soldBy });
+
+    if (!nome.trim() || !telefone.trim() || !selectedPlan || !soldBy) {
+      toast.error("Preencha todos os campos obrigatórios");
+      return;
+    }
+
     const payload = {
       client_name: nome.trim(),
       client_phone: telefone.replace(/\D/g, ''), // apenas numeros
@@ -212,7 +218,7 @@ function SubscriptionsTabContent() {
           <p className="text-muted-foreground">Cadastre novos planos mensais para os clientes</p>
         </div>
 
-        <div className="bg-card border border-border p-6 rounded-2xl space-y-4">
+        <form onSubmit={e => { e.preventDefault(); handleSell(); }} className="bg-card border border-border p-6 rounded-2xl space-y-4">
           {showSuccess && (
             <div className="bg-primary/20 text-primary p-4 rounded-xl flex items-center gap-2 font-medium">
               <CheckCircle className="w-5 h-5" /> Plano vendido e registrado com sucesso!
@@ -247,6 +253,7 @@ function SubscriptionsTabContent() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {PLAN_OPTIONS.map(plan => (
                 <button
+                  type="button"
                   key={plan.id}
                   onClick={() => setSelectedPlanId(plan.id)}
                   className={`p-4 rounded-xl border text-left transition-all ${selectedPlanId === plan.id ? 'border-primary bg-primary/10' : 'border-border bg-secondary hover:border-primary/50'}`}
@@ -276,6 +283,7 @@ function SubscriptionsTabContent() {
             <div className="flex gap-3 overflow-x-auto pb-2">
               {BARBERS.map(b => (
                 <button
+                  type="button"
                   key={b.id}
                   onClick={() => setSoldBy(b.id)}
                   className={`flex-shrink-0 flex items-center gap-2 p-2 pr-4 rounded-full border transition-all ${soldBy === b.id ? 'border-primary bg-primary/10' : 'border-border bg-secondary hover:border-primary/50'}`}
@@ -288,13 +296,13 @@ function SubscriptionsTabContent() {
           </div>
 
           <button
-            onClick={handleSell}
+            type="submit"
             disabled={isSubmitting || !nome || !telefone}
             className="w-full bg-primary text-primary-foreground font-bold py-4 rounded-xl flex justify-center items-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
           >
             {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirmar Venda do Plano'}
           </button>
-        </div>
+        </form>
       </div>
 
       <div className="w-full h-px bg-border my-8" />
