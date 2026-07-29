@@ -723,10 +723,58 @@ export default async function handler(req: any, res: any) {
         // 1.5. Realizar o desconto do corte na tabela subscriptions
         if (subDataToDeduct) {
           const newUsedCuts = subDataToDeduct.used_cuts + 1;
+          let updatedPlanType = subDataToDeduct.plan_type;
+          
+          try {
+            const planData = JSON.parse(subDataToDeduct.plan_type);
+            if (planData && planData.services) {
+              const services = planData.services;
+              const bookedServiceLower = (booking.service || '').toLowerCase();
+              
+              // Tenta achar qual serviço do plano bate com o agendado
+              let matchedKey = '';
+              for (const key of Object.keys(services)) {
+                if (bookedServiceLower.includes(key.toLowerCase()) || key.toLowerCase().includes(bookedServiceLower)) {
+                  matchedKey = key;
+                  break;
+                }
+              }
+              
+              // Fallback inteligente
+              if (!matchedKey) {
+                if (bookedServiceLower.includes('social') || bookedServiceLower.includes('degradê') || bookedServiceLower.includes('meia sola') || bookedServiceLower.includes('pigmentação') || bookedServiceLower.includes('luzes')) {
+                  if (services['Corte']) matchedKey = 'Corte';
+                  else if (services['Meia Sola'] && bookedServiceLower.includes('meia sola')) matchedKey = 'Meia Sola';
+                } else if (bookedServiceLower.includes('sobrancelha')) {
+                  if (services['Sobrancelha']) matchedKey = 'Sobrancelha';
+                } else if (bookedServiceLower.includes('barba')) {
+                  if (services['Barba']) matchedKey = 'Barba';
+                }
+              }
+              
+              if (matchedKey && services[matchedKey].used < services[matchedKey].total) {
+                services[matchedKey].used += 1;
+              } else {
+                const firstAvailableKey = Object.keys(services).find(k => services[k].used < services[k].total);
+                if (firstAvailableKey) {
+                  services[firstAvailableKey].used += 1;
+                }
+              }
+              
+              updatedPlanType = JSON.stringify(planData);
+            }
+          } catch (e) {
+            // Segue normal caso não seja JSON
+          }
+
           const newStatus = newUsedCuts >= subDataToDeduct.total_cuts ? 'expired' : 'active';
           await supabase
             .from('subscriptions')
-            .update({ used_cuts: newUsedCuts, status: newStatus })
+            .update({ 
+              used_cuts: newUsedCuts, 
+              status: newStatus,
+              plan_type: updatedPlanType
+            })
             .eq('id', subDataToDeduct.id);
         }
 
