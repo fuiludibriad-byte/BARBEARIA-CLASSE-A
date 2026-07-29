@@ -128,7 +128,7 @@ export const SERVICES: Service[] = [
 ];
 
 export const GALLERY_IMAGES = [
-  'https://i.imgur.com/PzF1aQ5.jpeg',
+  'https://i.imgur.com/MmfJB5q.jpeg',
   'https://i.imgur.com/nHMKfR0.jpeg',
   'https://i.imgur.com/hrqwaa2.jpeg',
   'https://i.imgur.com/7eiD0Vf.jpeg'
