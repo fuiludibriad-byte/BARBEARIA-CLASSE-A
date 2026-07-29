@@ -79,54 +79,14 @@ function SubscriptionsTabContent() {
 
   const handleSell = async () => {
     if (!nome.trim() || !telefone.trim() || !selectedPlan) return;
-
     const payload = {
       client_name: nome.trim(),
       client_phone: telefone.replace(/\D/g, ''), // apenas numeros
-      plan_type: isCustom ? 'custom' : (selectedPlan.name.toLowerCase().includes('quinzenal') ? 'quinzenal' : 'mensal'),
+      plan_type: isCustom ? 'Personalizado' : selectedPlan.name,
       total_cuts: isCustom ? customServices : selectedPlan.totalServices,
       price: isCustom ? customPrice : selectedPlan.price,
       barber_id: soldBy
     };
-
-    let planJson = '';
-    if (isCustom) {
-      planJson = JSON.stringify({
-        name: 'Personalizado',
-        services: {
-          'Serviço': { total: customServices, used: 0 }
-        }
-      });
-    } else {
-      const servicesMap: Record<string, number> = {};
-      if (selectedPlanId === 'plan-100') {
-        servicesMap['Corte'] = 4;
-      } else if (selectedPlanId === 'plan-120') {
-        servicesMap['Corte'] = 2;
-        servicesMap['Barba'] = 2;
-      } else if (selectedPlanId === 'plan-140') {
-        servicesMap['Corte'] = 4;
-        servicesMap['Barba'] = 2;
-      } else if (selectedPlanId === 'plan-160') {
-        servicesMap['Corte'] = 4;
-        servicesMap['Sobrancelha'] = 4;
-        servicesMap['Meia Sola'] = 4;
-      } else if (selectedPlanId === 'plan-180') {
-        servicesMap['Corte'] = 4;
-        servicesMap['Barba'] = 4;
-        servicesMap['Sobrancelha'] = 4;
-      }
-      
-      const servicesObj: Record<string, { total: number, used: number }> = {};
-      Object.keys(servicesMap).forEach(key => {
-        servicesObj[key] = { total: servicesMap[key], used: 0 };
-      });
-
-      planJson = JSON.stringify({
-        name: selectedPlan ? selectedPlan.name : 'Plano',
-        services: servicesObj
-      });
-    }
 
     setIsSubmitting(true);
     try {
@@ -135,7 +95,7 @@ function SubscriptionsTabContent() {
         .insert({
           client_name: payload.client_name,
           client_phone: payload.client_phone,
-          plan_type: planJson,
+          plan_type: payload.plan_type,
           total_cuts: payload.total_cuts,
           used_cuts: 0,
           price: payload.price,
@@ -172,52 +132,23 @@ function SubscriptionsTabContent() {
       const sub = subscriptions.find(s => s.id === id);
       if (!sub) return;
 
-      let isJson = false;
-      let planData: any = null;
-      try {
-        planData = JSON.parse(sub.plan_type);
-        isJson = !!(planData && planData.services);
-      } catch (e) {}
+      const planName = sub.plan_type || '';
+      const itensPorSessao = planName.includes('+') ? planName.split('+').length : 1;
+      const baixaReal = Math.min(itensPorSessao, (sub.total_cuts || 0) - (sub.used_cuts || 0));
 
-      let newUsedCuts = (sub.used_cuts || 0);
-      let updatedPlanType = sub.plan_type;
-
-      if (isJson && planData) {
-        // decrementa 1 unidade de cada serviço do combo que ainda tenha saldo
-        const services = planData.services;
-        let deductedAny = false;
-        let totalDeductions = 0;
-
-        Object.keys(services).forEach(serviceName => {
-          const item = services[serviceName];
-          const remaining = item.total - item.used;
-          if (remaining > 0) {
-            item.used += 1;
-            deductedAny = true;
-            totalDeductions += 1;
-          }
-        });
-
-        if (!deductedAny) {
-          toast.error("Este plano não possui mais cortes/serviços disponíveis.");
-          return;
-        }
-
-        newUsedCuts += totalDeductions;
-        updatedPlanType = JSON.stringify(planData);
-      } else {
-        // fallback para planos antigos
-        newUsedCuts += 1;
+      if (baixaReal <= 0) {
+        toast.error("Este plano não possui mais cortes/serviços disponíveis.");
+        return;
       }
 
+      const newUsedCuts = (sub.used_cuts || 0) + baixaReal;
       const newStatus = newUsedCuts >= (sub.total_cuts || 1) ? 'expired' : 'active';
 
       const { error } = await supabase
         .from('subscriptions')
         .update({ 
           used_cuts: newUsedCuts, 
-          status: newStatus,
-          plan_type: updatedPlanType
+          status: newStatus
         })
         .eq('id', id);
 
@@ -226,7 +157,7 @@ function SubscriptionsTabContent() {
       if (newStatus === 'expired') {
         toast.success('Todos os serviços utilizados! Plano finalizado com sucesso.');
       } else {
-        toast.success('Serviços do combo abatidos com sucesso!');
+        toast.success(`Abatido com sucesso: ${baixaReal} item(ns) da sessão.`);
       }
       await fetchSubscriptions();
     } catch (err: any) {
@@ -442,46 +373,21 @@ function SubscriptionsTabContent() {
                     {isExpired && <span className="bg-amber-500/20 text-amber-500 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide">Esgotado</span>}
                     {isCanceled && <span className="bg-destructive/20 text-destructive px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide">Cancelado</span>}
                   </div>
-                  {(() => {
-                    let displayName = sub.plan_type;
-                    let servicesBreakdown = null;
-                    let isCombo = false;
-                    try {
-                      const parsed = JSON.parse(sub.plan_type);
-                      if (parsed && parsed.name) {
-                        displayName = parsed.name;
-                      }
-                      if (parsed && parsed.services) {
-                        const keys = Object.keys(parsed.services);
-                        isCombo = keys.length > 1;
-                        servicesBreakdown = (
-                          <div className="mt-3 space-y-1 bg-secondary/30 p-3 rounded-xl border border-border/50">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">Saldo do Combo:</p>
-                            {keys.map(name => {
-                              const s = parsed.services[name];
-                              const rem = s.total - s.used;
-                              return (
-                                <div key={name} className="flex justify-between text-xs">
-                                  <span className="text-foreground/80">{name}</span>
-                                  <span className="font-semibold text-foreground">{s.used} / {s.total} <span className="text-muted-foreground text-[10px] font-normal">({rem} rest.)</span></span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      }
-                    } catch (e) {}
+                  
+                  <div className="space-y-1 mb-4">
+                    <p className="text-sm"><span className="text-muted-foreground">Plano:</span> <span className="font-medium capitalize">{sub.plan_type || 'Customizado'}</span></p>
+                    <p className="text-sm"><span className="text-muted-foreground">Vendido por:</span> <span className="font-medium">{getBarberName(sub.barber_id)}</span></p>
+                    <p className="text-sm"><span className="text-muted-foreground">Início:</span> <span className="font-medium">{sub.created_at ? format(new Date(sub.created_at), "dd 'de' MMM, yyyy", { locale: ptBR }) : 'Data indisponível'}</span></p>
+                  </div>
 
-                    return (
-                      <>
-                        <div className="space-y-1 mb-4">
-                          <p className="text-sm"><span className="text-muted-foreground">Plano:</span> <span className="font-medium capitalize">{displayName || 'Customizado'}</span></p>
-                          <p className="text-sm"><span className="text-muted-foreground">Vendido por:</span> <span className="font-medium">{getBarberName(sub.barber_id)}</span></p>
-                          <p className="text-sm"><span className="text-muted-foreground">Início:</span> <span className="font-medium">{sub.created_at ? format(new Date(sub.created_at), "dd 'de' MMM, yyyy", { locale: ptBR }) : 'Data indisponível'}</span></p>
-                        </div>
-                        {servicesBreakdown}
+                  <div className="my-4">
+                    {(() => {
+                      const planName = sub.plan_type || '';
+                      const itensPorSessao = planName.includes('+') ? planName.split('+').length : 1;
+                      const baixaReal = Math.min(itensPorSessao, (sub.total_cuts || 0) - (sub.used_cuts || 0));
 
-                        <div className="my-4">
+                      return (
+                        <>
                           <div className="flex justify-between text-xs font-bold mb-1.5">
                             <span className="text-muted-foreground">Serviços Utilizados</span>
                             <span className={isActive ? 'text-primary' : 'text-muted-foreground'}>{sub.used_cuts || 0} / {sub.total_cuts || 1}</span>
@@ -492,34 +398,35 @@ function SubscriptionsTabContent() {
                               style={{ width: `${Math.min(progress, 100)}%` }}
                             />
                           </div>
-                        </div>
 
-                        <div className="flex gap-2 mt-4 pt-4 border-t border-border">
-                          <button 
-                            onClick={() => handleDeduct(sub.id)}
-                            disabled={!isActive || processingId === sub.id}
-                            className="flex-1 bg-primary text-primary-foreground font-bold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {processingId === sub.id ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <>
-                                <Minus className="w-4 h-4" /> 
-                                {isCombo ? 'Dar Baixa na Visita (Combo)' : 'Dar Baixa (1 Corte)'}
-                              </>
-                            )}
-                          </button>
-                          <button 
-                            onClick={() => handleCancel(sub.id)}
-                            disabled={!isActive || processingId === sub.id}
-                            className="px-4 bg-destructive/10 text-destructive font-bold py-2.5 rounded-xl text-sm hover:bg-destructive hover:text-destructive-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Cancelar Plano"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </>
-                  })()}
+                          <div className="flex gap-2 mt-4 pt-4 border-t border-border">
+                            <button 
+                              onClick={() => handleDeduct(sub.id)}
+                              disabled={!isActive || processingId === sub.id}
+                              className="flex-1 bg-primary text-primary-foreground font-bold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {processingId === sub.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <Minus className="w-4 h-4" /> 
+                                  Dar Baixa ({baixaReal} Itens da Sessão)
+                                </>
+                              )}
+                            </button>
+                            <button 
+                              onClick={() => handleCancel(sub.id)}
+                              disabled={!isActive || processingId === sub.id}
+                              className="px-4 bg-destructive/10 text-destructive font-bold py-2.5 rounded-xl text-sm hover:bg-destructive hover:text-destructive-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Cancelar Plano"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
                 </div>
               );
             })}
