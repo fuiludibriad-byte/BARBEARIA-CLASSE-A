@@ -106,6 +106,7 @@ export const PLAN_OPTIONS: PlanOption[] = [
   { id: 'plan-100', name: '4 Cortes', totalServices: 4, price: 100 },
   { id: 'plan-120', name: '2 Cortes + 2 Barbas', totalServices: 4, price: 120 },
   { id: 'plan-140', name: '4 Cortes + 2 Barbas', totalServices: 6, price: 140 },
+  { id: 'plan-160', name: '4 Cortes + 4 Sobrancelhas + 4 Meia Sola', totalServices: 12, price: 160 },
   { id: 'plan-180', name: '4 Cortes + 4 Barbas + 4 Sobrancelhas', totalServices: 12, price: 180 },
   { id: 'plan-custom', name: 'Personalizado', totalServices: 1, price: 0 }
 ];
