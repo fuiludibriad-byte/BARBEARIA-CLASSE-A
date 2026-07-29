@@ -77,8 +77,9 @@ function SubscriptionsTabContent() {
     fetchSubscriptions();
   }, []);
 
-  const handleSell = async () => {
-    console.log("Tentando salvar plano:", { clientName: nome, phone: telefone, selectedPlan, selectedBarber: soldBy });
+  const handleSell = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    console.log("Botão de Venda Clicado!", { name: nome, phone: telefone });
 
     if (!nome.trim() || !telefone.trim() || !selectedPlan || !soldBy) {
       toast.error("Preencha todos os campos obrigatórios");
@@ -218,7 +219,7 @@ function SubscriptionsTabContent() {
           <p className="text-muted-foreground">Cadastre novos planos mensais para os clientes</p>
         </div>
 
-        <form onSubmit={e => { e.preventDefault(); handleSell(); }} className="bg-card border border-border p-6 rounded-2xl space-y-4">
+        <form onSubmit={handleSell} className="bg-card border border-border p-6 rounded-2xl space-y-4">
           {showSuccess && (
             <div className="bg-primary/20 text-primary p-4 rounded-xl flex items-center gap-2 font-medium">
               <CheckCircle className="w-5 h-5" /> Plano vendido e registrado com sucesso!
@@ -297,7 +298,7 @@ function SubscriptionsTabContent() {
 
           <button
             type="submit"
-            disabled={isSubmitting || !nome || !telefone}
+            disabled={isSubmitting}
             className="w-full bg-primary text-primary-foreground font-bold py-4 rounded-xl flex justify-center items-center gap-2 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
           >
             {isSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Confirmar Venda do Plano'}
