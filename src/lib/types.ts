@@ -131,7 +131,9 @@ export const GALLERY_IMAGES = [
   'https://i.imgur.com/MmfJB5q.jpeg',
   'https://i.imgur.com/nHMKfR0.jpeg',
   'https://i.imgur.com/hrqwaa2.jpeg',
-  'https://i.imgur.com/7eiD0Vf.jpeg'
+  'https://i.imgur.com/7eiD0Vf.jpeg',
+  'https://i.imgur.com/aJYLvTj.jpeg',
+  'https://i.imgur.com/jq04SIz.jpeg'
 ];
 
 export const WHATSAPP_NUMBER = '554184491703';
