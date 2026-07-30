@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://fallback.supabase.co';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'fallback-key';
+const supabaseUrl = (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_SUPABASE_URL : '') || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_URL : '') || 'https://fallback.supabase.co';
+const supabaseKey = (typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_SUPABASE_ANON_KEY : '') || (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_ANON_KEY : '') || 'fallback-key';
 
 let sanitizedUrl = supabaseUrl;
 if (sanitizedUrl && !sanitizedUrl.startsWith('http')) {
