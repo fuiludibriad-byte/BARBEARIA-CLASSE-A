@@ -77,44 +77,24 @@ export default async function handler(req: any, res: any) {
     if (req.method === 'GET' && action === 'finance_report') {
       const { period, startDate: reqStartDate, endDate: reqEndDate } = req.query; // today, week, month, or custom YYYY-MM-DD
       
-      let startDateIso = '';
-      let endDateIso = '';
-
-      if (reqStartDate && reqEndDate) {
-        const [sYear, sMonth, sDay] = (reqStartDate as string).split('-').map(Number);
-        const [eYear, eMonth, eDay] = (reqEndDate as string).split('-').map(Number);
-
-        const sD = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
-        const eD = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
-
-        startDateIso = sD.toISOString();
-        endDateIso = eD.toISOString();
-      } else {
-        let startDate = new Date();
-        startDate.setHours(0, 0, 0, 0);
-        
-        let endDate = new Date(startDate);
-
-        if (period === 'week') {
-          startDate.setDate(startDate.getDate() - startDate.getDay()); // Inicio da semana (Domingo)
-          endDate = new Date(startDate);
-          endDate.setDate(startDate.getDate() + 6); // Fim da semana (Sábado)
-        } else if (period === 'month') {
-          startDate.setDate(1); // Inicio do mes
-          endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0); // Fim do mes
-        }
-
-        endDate.setHours(23, 59, 59, 999);
-
-        startDateIso = startDate.toISOString();
-        endDateIso = endDate.toISOString();
+      if (!reqStartDate || !reqEndDate) {
+        return res.status(400).json({ error: 'startDate and endDate are required' });
       }
+
+      const [sYear, sMonth, sDay] = (reqStartDate as string).split('-').map(Number);
+      const [eYear, eMonth, eDay] = (reqEndDate as string).split('-').map(Number);
+
+      const sD = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
+      const eD = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
+
+      const startDateIso = sD.toISOString();
+      const endDateIso = eD.toISOString();
 
       // Busca appointments
       const { data: appointments, error: appErr } = await supabase
         .from('appointments')
         .select('*')
-        .in('status', ['completed']) // Apenas concluidos
+        .in('status', ['completed', 'concluido']) // Apenas concluidos e legados
         .gte('data_hora_inicio', startDateIso)
         .lte('data_hora_inicio', endDateIso);
 

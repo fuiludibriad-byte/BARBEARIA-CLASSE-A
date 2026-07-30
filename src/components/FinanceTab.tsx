@@ -47,10 +47,33 @@ function FinanceTabContent() {
   const fetchFinance = async () => {
     setLoading(true);
     try {
-      let url = `/api/finance?action=finance_report&period=${period}`;
+      let sDateStr = '';
+      let eDateStr = '';
+
       if (isCustomDate && customStart && customEnd) {
-        url = `/api/finance?action=finance_report&startDate=${customStart}&endDate=${customEnd}`;
+        sDateStr = customStart;
+        eDateStr = customEnd;
+      } else {
+        const now = new Date();
+        if (period === 'today') {
+          sDateStr = format(now, 'yyyy-MM-dd');
+          eDateStr = format(now, 'yyyy-MM-dd');
+        } else if (period === 'week') {
+          const startOfWeek = new Date(now);
+          startOfWeek.setDate(now.getDate() - now.getDay());
+          const endOfWeek = new Date(startOfWeek);
+          endOfWeek.setDate(startOfWeek.getDate() + 6);
+          sDateStr = format(startOfWeek, 'yyyy-MM-dd');
+          eDateStr = format(endOfWeek, 'yyyy-MM-dd');
+        } else if (period === 'month') {
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          sDateStr = format(startOfMonth, 'yyyy-MM-dd');
+          eDateStr = format(endOfMonth, 'yyyy-MM-dd');
+        }
       }
+
+      const url = `/api/finance?action=finance_report&startDate=${sDateStr}&endDate=${eDateStr}`;
 
       const [reportRaw, commRaw] = await Promise.all([
         fetch(url),
