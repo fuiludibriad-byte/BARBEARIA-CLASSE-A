@@ -171,10 +171,8 @@ const BookingSection = () => {
         return false;
       }
 
-      // Check if the service ends after closing time (20:00 = 1200 minutes)
-      if (end > 1200) {
-        return false;
-      }
+      // A limitação rígida de 20:00 (1200) foi removida.
+      // O horário será exibido desde que esteja nos baseSlots e não conflite com outros agendamentos.
 
       // Check overlap with schedule blocks of the day
       const hasBlockOverlap = blocks.some((block) => {
