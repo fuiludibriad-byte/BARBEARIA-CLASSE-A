@@ -4,6 +4,7 @@ import { DollarSign, UserCheck, Scissors, Loader2, Save } from 'lucide-react';
 import React from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
   constructor(props: {children: React.ReactNode}) {
