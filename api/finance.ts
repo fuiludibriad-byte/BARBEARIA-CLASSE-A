@@ -75,19 +75,33 @@ export default async function handler(req: any, res: any) {
     }
 
     if (req.method === 'GET' && action === 'finance_report') {
-      const { period } = req.query; // today, week, month
+      const { period, startDate: reqStartDate, endDate: reqEndDate } = req.query; // today, week, month, or custom YYYY-MM-DD
       
-      let startDate = new Date();
-      startDate.setHours(0, 0, 0, 0);
+      let startDateIso = '';
+      let endDateIso = '';
 
-      if (period === 'week') {
-        startDate.setDate(startDate.getDate() - startDate.getDay()); // Inicio da semana (Domingo)
-      } else if (period === 'month') {
-        startDate.setDate(1); // Inicio do mes
+      if (reqStartDate && reqEndDate) {
+        const [sYear, sMonth, sDay] = (reqStartDate as string).split('-').map(Number);
+        const [eYear, eMonth, eDay] = (reqEndDate as string).split('-').map(Number);
+
+        const sD = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
+        const eD = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
+
+        startDateIso = sD.toISOString();
+        endDateIso = eD.toISOString();
+      } else {
+        let startDate = new Date();
+        startDate.setHours(0, 0, 0, 0);
+
+        if (period === 'week') {
+          startDate.setDate(startDate.getDate() - startDate.getDay()); // Inicio da semana (Domingo)
+        } else if (period === 'month') {
+          startDate.setDate(1); // Inicio do mes
+        }
+
+        startDateIso = startDate.toISOString();
+        endDateIso = new Date().toISOString(); // now
       }
-
-      const startDateIso = startDate.toISOString();
-      const endDateIso = new Date().toISOString(); // now
 
       // Busca appointments
       const { data: appointments, error: appErr } = await supabase

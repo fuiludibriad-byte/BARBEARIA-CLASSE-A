@@ -166,6 +166,11 @@ const BookingSection = () => {
         return false;
       }
 
+      // Check if the service starts before opening time (09:00 = 540 minutes)
+      if (start < 540) {
+        return false;
+      }
+
       // Check if the service ends after closing time (20:00 = 1200 minutes)
       if (end > 1200) {
         return false;

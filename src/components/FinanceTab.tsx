@@ -34,6 +34,9 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
 
 function FinanceTabContent() {
   const [period, setPeriod] = useState<'today' | 'week' | 'month'>('today');
+  const [customStart, setCustomStart] = useState<string>('');
+  const [customEnd, setCustomEnd] = useState<string>('');
+  const [isCustomDate, setIsCustomDate] = useState(false);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<{ appointments: Booking[]; subscriptions: Subscription[] }>({ appointments: [], subscriptions: [] });
   const [commissionsDb, setCommissionsDb] = useState<BarberCommission[]>([]);
@@ -44,8 +47,13 @@ function FinanceTabContent() {
   const fetchFinance = async () => {
     setLoading(true);
     try {
+      let url = `/api/finance?action=finance_report&period=${period}`;
+      if (isCustomDate && customStart && customEnd) {
+        url = `/api/finance?action=finance_report&startDate=${customStart}&endDate=${customEnd}`;
+      }
+
       const [reportRaw, commRaw] = await Promise.all([
-        fetch(`/api/finance?action=finance_report&period=${period}`),
+        fetch(url),
         fetch('/api/finance?action=get_commissions')
       ]);
 
@@ -77,8 +85,14 @@ function FinanceTabContent() {
   };
 
   useEffect(() => {
-    fetchFinance();
-  }, [period]);
+    if (isCustomDate) {
+      if (customStart && customEnd) {
+        fetchFinance();
+      }
+    } else {
+      fetchFinance();
+    }
+  }, [period, isCustomDate, customStart, customEnd]);
 
   const handleSaveCommission = async (barberId: string, barberName: string) => {
     const val = editedCommissions[barberId];
@@ -202,19 +216,52 @@ function FinanceTabContent() {
           <p className="text-muted-foreground">Visão geral do faturamento e repasses</p>
         </div>
         
-        <div className="flex bg-secondary p-1 rounded-xl">
-          <button 
-            onClick={() => setPeriod('today')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${period === 'today' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-          >Hoje</button>
-          <button 
-            onClick={() => setPeriod('week')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${period === 'week' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-          >Semana</button>
-          <button 
-            onClick={() => setPeriod('month')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${period === 'month' ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-          >Mês</button>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="flex bg-secondary p-1 rounded-xl">
+            <button 
+              onClick={() => {
+                setIsCustomDate(false);
+                setPeriod('today');
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${(!isCustomDate && period === 'today') ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >Hoje</button>
+            <button 
+              onClick={() => {
+                setIsCustomDate(false);
+                setPeriod('week');
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${(!isCustomDate && period === 'week') ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >Semana</button>
+            <button 
+              onClick={() => {
+                setIsCustomDate(false);
+                setPeriod('month');
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${(!isCustomDate && period === 'month') ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >Mês</button>
+            <button 
+              onClick={() => setIsCustomDate(true)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${(isCustomDate) ? 'bg-background text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+            >Personalizado</button>
+          </div>
+
+          {isCustomDate && (
+            <div className="flex items-center gap-2 bg-secondary p-2 rounded-xl border border-border">
+              <input 
+                type="date"
+                value={customStart}
+                onChange={e => setCustomStart(e.target.value)}
+                className="bg-transparent text-sm text-foreground outline-none border-none [color-scheme:dark]"
+              />
+              <span className="text-muted-foreground text-xs">até</span>
+              <input 
+                type="date"
+                value={customEnd}
+                onChange={e => setCustomEnd(e.target.value)}
+                className="bg-transparent text-sm text-foreground outline-none border-none [color-scheme:dark]"
+              />
+            </div>
+          )}
         </div>
       </div>
 
