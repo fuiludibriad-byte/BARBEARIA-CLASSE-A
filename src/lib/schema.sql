@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS appointments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   barber_id TEXT NULL,
   price DECIMAL(10,2) DEFAULT 0.00,
-  is_plan_usage BOOLEAN DEFAULT FALSE
+  is_plan_usage BOOLEAN DEFAULT FALSE,
+  is_settled BOOLEAN DEFAULT FALSE
 );
 
 -- Índices para buscas rápidas por faixa de horário e por ID do evento do Google Calendar
@@ -48,19 +49,19 @@ CREATE TABLE IF NOT EXISTS date_specific_slots (
 );
 
 -- Assinaturas (Planos Mensais)
-CREATE TABLE IF NOT EXISTS client_subscriptions (
+CREATE TABLE IF NOT EXISTS subscriptions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  cliente_nome TEXT NOT NULL,
-  cliente_telefone TEXT NOT NULL,
-  plan_name TEXT NOT NULL,
-  total_services INTEGER NOT NULL,
-  services_used INTEGER DEFAULT 0,
+  client_name TEXT NOT NULL,
+  client_phone TEXT NOT NULL,
+  plan_type TEXT NOT NULL,
+  total_cuts INTEGER NOT NULL,
+  used_cuts INTEGER NOT NULL DEFAULT 0,
+  barber_id TEXT NOT NULL,
   price DECIMAL(10,2) NOT NULL,
-  sold_by TEXT NULL, -- barber_id de quem vendeu
-  status TEXT NOT NULL DEFAULT 'active', -- 'active', 'exhausted', 'expired'
+  status TEXT NOT NULL DEFAULT 'active',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  expires_at TIMESTAMPTZ NOT NULL
+  is_settled BOOLEAN DEFAULT FALSE
 );
 
-CREATE INDEX IF NOT EXISTS idx_subscriptions_telefone ON client_subscriptions (cliente_telefone);
-CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON client_subscriptions (status);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_phone ON subscriptions (client_phone);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions (status);

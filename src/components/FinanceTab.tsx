@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { BARBERS, Subscription, Booking, BarberCommission } from '@/lib/types';
 import { DollarSign, UserCheck, Scissors, Loader2, Save } from 'lucide-react';
 import React from 'react';
+import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean, error: any}> {
   constructor(props: {children: React.ReactNode}) {
@@ -37,6 +39,7 @@ function FinanceTabContent() {
   const [commissionsDb, setCommissionsDb] = useState<BarberCommission[]>([]);
   const [editedCommissions, setEditedCommissions] = useState<Record<string, number>>({});
   const [savingCommission, setSavingCommission] = useState<string | null>(null);
+  const [payingBarberId, setPayingBarberId] = useState<string | null>(null);
 
   const fetchFinance = async () => {
     setLoading(true);
@@ -97,6 +100,38 @@ function FinanceTabContent() {
     }
   };
 
+  const handlePayRepasse = async (barberId: string) => {
+    if (payingBarberId) return;
+    setPayingBarberId(barberId);
+    try {
+      // 1. Atualiza appointments
+      const { error: appErr } = await supabase
+        .from('appointments')
+        .update({ is_settled: true })
+        .eq('barber_id', barberId)
+        .neq('is_settled', true);
+
+      if (appErr) throw appErr;
+
+      // 2. Atualiza subscriptions
+      const { error: subErr } = await supabase
+        .from('subscriptions')
+        .update({ is_settled: true })
+        .eq('barber_id', barberId)
+        .neq('is_settled', true);
+
+      if (subErr) throw subErr;
+
+      toast.success("Pagamento registrado e repasse zerado!");
+      fetchFinance();
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Erro ao registrar pagamento: " + (err?.message || "Erro de conexão"));
+    } finally {
+      setPayingBarberId(null);
+    }
+  };
+
   const calculateFinance = () => {
     let grossTotal = 0;
     let netBarbers: Record<string, number> = {};
@@ -106,6 +141,8 @@ function FinanceTabContent() {
     BARBERS.forEach(b => netBarbers[b.id] = 0);
 
     const getBarberCommissionRate = (barberId: string) => {
+      const editedRate = editedCommissions[barberId];
+      if (editedRate !== undefined) return editedRate / 100;
       const dbRate = commissionsDb.find(c => c.barber_id === barberId)?.commission_percentage;
       return dbRate !== undefined ? dbRate / 100 : 0.5; // fallback to 50%
     };
@@ -117,12 +154,17 @@ function FinanceTabContent() {
       const price = Number(app.price) || 0;
       grossTotal += price;
       
-      const barber = BARBERS.find(b => b.id === app.barberId);
+      const barberId = app.barberId || (app as any).barber_id;
+      const barber = BARBERS.find(b => b.id === barberId);
       if (barber && price > 0) {
         const rate = getBarberCommissionRate(barber.id);
         const commission = price * rate;
-        netBarbers[barber.id] += commission;
-        totalCommissions += commission;
+        totalCommissions += commission; // Lucro estúdio desconta todas as comissões geradas no período
+        
+        // Barbeiro só recebe o repasse pendente se não tiver sido acertado ainda (is_settled !== true)
+        if (!(app as any).is_settled) {
+          netBarbers[barber.id] += commission;
+        }
       }
     });
 
@@ -135,8 +177,12 @@ function FinanceTabContent() {
       if (barber && price > 0) {
         const rate = getBarberCommissionRate(barber.id);
         const commission = price * rate;
-        netBarbers[barber.id] += commission;
-        totalCommissions += commission;
+        totalCommissions += commission; // Lucro estúdio desconta todas as comissões geradas no período
+        
+        // Barbeiro só recebe o repasse pendente se não tiver sido acertado ainda (is_settled !== true)
+        if (!(sub as any).is_settled) {
+          netBarbers[barber.id] += commission;
+        }
       }
     });
 
@@ -216,7 +262,18 @@ function FinanceTabContent() {
                     <img src={b.image} alt={b.name} className="w-10 h-10 rounded-full object-cover" />
                     <div>
                       <span className="text-sm font-bold block">{b.name}</span>
-                      <span className="text-xs text-muted-foreground">Repasse Acumulado: R$ {(netBarbers[b.id] || 0).toFixed(2)}</span>
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <span className="text-xs text-muted-foreground">Repasse Acumulado: R$ {(netBarbers[b.id] || 0).toFixed(2)}</span>
+                        {(netBarbers[b.id] || 0) > 0 && (
+                          <button
+                            onClick={() => handlePayRepasse(b.id)}
+                            disabled={payingBarberId === b.id}
+                            className="text-[10px] bg-primary/20 hover:bg-primary/30 text-primary font-bold px-2 py-0.5 rounded-full transition-colors flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {payingBarberId === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "💰 Pagar Repasse"}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 bg-secondary p-1 rounded-lg">
