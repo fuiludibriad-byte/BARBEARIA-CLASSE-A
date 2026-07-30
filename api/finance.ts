@@ -108,6 +108,7 @@ export default async function handler(req: any, res: any) {
 
         startDateIso = startDate.toISOString();
         endDateIso = endDate.toISOString();
+      }
 
       // Busca appointments
       const { data: appointments, error: appErr } = await supabase
