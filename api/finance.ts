@@ -92,16 +92,22 @@ export default async function handler(req: any, res: any) {
       } else {
         let startDate = new Date();
         startDate.setHours(0, 0, 0, 0);
+        
+        let endDate = new Date(startDate);
 
         if (period === 'week') {
           startDate.setDate(startDate.getDate() - startDate.getDay()); // Inicio da semana (Domingo)
+          endDate = new Date(startDate);
+          endDate.setDate(startDate.getDate() + 6); // Fim da semana (Sábado)
         } else if (period === 'month') {
           startDate.setDate(1); // Inicio do mes
+          endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0); // Fim do mes
         }
 
+        endDate.setHours(23, 59, 59, 999);
+
         startDateIso = startDate.toISOString();
-        endDateIso = new Date().toISOString(); // now
-      }
+        endDateIso = endDate.toISOString();
 
       // Busca appointments
       const { data: appointments, error: appErr } = await supabase
