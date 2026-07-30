@@ -252,7 +252,23 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                .map(t => ({ selected_date: dt, time: t, barber_id: activeSlotsBarberId }));
             
             const { error: insErr } = await supabase.from('date_specific_slots').insert(toInsert);
-            if (insErr) throw insErr;
+            
+            if (insErr) {
+              if (insErr.code === '23505') {
+                // Race condition! The user clicked very fast and the default slots were already inserted by another click.
+                // We just fallback to deleting the specific time.
+                const { error: fallbackErr } = await supabase
+                  .from('date_specific_slots')
+                  .delete()
+                  .eq('selected_date', dt)
+                  .eq('time', time)
+                  .eq('barber_id', activeSlotsBarberId);
+                  
+                if (fallbackErr) throw fallbackErr;
+              } else {
+                throw insErr;
+              }
+            }
 
             let newSlots = [...dateSlots];
             toInsert.forEach(s => newSlots.push(s));
