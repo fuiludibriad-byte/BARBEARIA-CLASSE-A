@@ -942,7 +942,11 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     });
   }, [completedForDashboard, filter]);
 
-  const totalRevenue = filteredCompleted.reduce((sum, b) => sum + b.price, 0);
+  const totalRevenue = filteredCompleted.reduce((sum, b) => {
+    const rawVal = b.price || (b as any).valor || 0;
+    const cleanVal = Number(String(rawVal).replace(',', '.'));
+    return sum + (isNaN(cleanVal) ? 0 : cleanVal);
+  }, 0);
   const totalServices = filteredCompleted.length;
 
   const pendingCount = displayBookings.filter(b => b.status === 'pending').length;

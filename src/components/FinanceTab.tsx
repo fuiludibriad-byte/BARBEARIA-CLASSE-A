@@ -161,11 +161,18 @@ function FinanceTabContent() {
       return dbRate !== undefined ? dbRate / 100 : 0.5; // fallback to 50%
     };
 
+    const sanitizePrice = (item: any) => {
+      const rawValue = item.price || item.valor || 0;
+      const cleanValue = Number(String(rawValue).replace(',', '.'));
+      return isNaN(cleanValue) ? 0 : cleanValue;
+    };
+
     // Soma agendamentos (apenas serviços avulsos, pois se for plano, a grana já entrou na venda do plano)
     (data.appointments || []).forEach(app => {
       if (app.is_plan_usage) return; // Se foi pago com plano, o valor entrou na venda do plano, não agora
+      if (app.status !== 'completed' && app.status !== 'concluido') return; // Garantia extra no front-end
       
-      const price = Number(app.price) || 0;
+      const price = sanitizePrice(app);
       grossTotal += price;
       
       const barberId = app.barberId || (app as any).barber_id;
@@ -184,7 +191,7 @@ function FinanceTabContent() {
 
     // Soma assinaturas vendidas
     (data.subscriptions || []).forEach(sub => {
-      const price = Number(sub.price) || 0;
+      const price = sanitizePrice(sub);
       grossTotal += price;
 
       const barber = BARBERS.find(b => b.id === sub.barber_id);
