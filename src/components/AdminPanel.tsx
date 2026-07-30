@@ -207,7 +207,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     if (!isDate) {
       const wk = Number(weekdayOrDate);
       // Optimistic update
-      setWhitelistSlots(whitelistSlots.filter(s => !(s.weekday === wk && s.time === time)));
+      setWhitelistSlots(prev => prev.filter(s => !(s.weekday === wk && s.time === time)));
 
       fetch('/api/calendar', {
         method: 'POST',
@@ -293,7 +293,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
 
             if (error) throw error;
 
-            setDateSlots(dateSlots.filter(s => !(s.selected_date === dt && s.time === time && s.barber_id === activeSlotsBarberId)));
+            setDateSlots(prev => prev.filter(s => !(s.selected_date === dt && s.time === time && s.barber_id === activeSlotsBarberId)));
             toast.success("Horário excluído do banco com sucesso!");
           }
         } catch (err: any) {
@@ -310,7 +310,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     if (slotsMode === 'weekly') {
       if (!window.confirm("Deseja realmente limpar todos os horários deste dia?")) return;
       // Optimistic update
-      setWhitelistSlots(whitelistSlots.filter(s => s.weekday !== selectedWeekday));
+      setWhitelistSlots(prev => prev.filter(s => s.weekday !== selectedWeekday));
 
       fetch('/api/calendar', {
         method: 'POST',
@@ -348,7 +348,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
 
           if (error) throw error;
 
-          setDateSlots(dateSlots.filter(s => !(s.selected_date === selectedDateStr && s.barber_id === activeSlotsBarberId)));
+          setDateSlots(prev => prev.filter(s => !(s.selected_date === selectedDateStr && s.barber_id === activeSlotsBarberId)));
           toast.success("Grade do dia limpa com sucesso do banco!");
         } catch (err: any) {
           console.error(err);
