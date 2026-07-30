@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '@/lib/supabase';
 import { Booking, SERVICES, generateWhatsAppUrl, formatPhone, ScheduleBlock } from '@/lib/types';
 import { getBookings, saveBookings, getCompleted, saveCompleted, addCompleted, removeCompleted, addBooking, getBlocks, saveBlocks, addBlock, removeBlock } from '@/lib/bookingStore';
 import { useNavigate } from 'react-router-dom';
@@ -646,15 +647,15 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
       window.open(generateWhatsAppUrl(booking.phone, msg), '_blank');
     }
 
-    const updated = bookings.filter(b => b.id !== booking.id);
-    saveBookings(updated);
-    setBookings(updated);
-    setRefusingId(null);
-
     const executeRefuse = async () => {
       try {
         const { error } = await supabase.from('appointments').delete().eq('id', booking.id);
         if (error) throw error;
+        
+        const updated = bookings.filter(b => b.id !== booking.id);
+        saveBookings(updated);
+        setBookings(updated);
+        setRefusingId(null);
         
         toast.success("Agendamento recusado com sucesso.");
       } catch (err: any) {
@@ -675,15 +676,15 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     if (!cancellingBooking) return;
     const booking = cancellingBooking;
 
-    const updated = bookings.filter(b => b.id !== booking.id);
-    saveBookings(updated);
-    setBookings(updated);
-    setCancellingBooking(null);
-
     const executeConfirmCancel = async () => {
       try {
         const { error } = await supabase.from('appointments').delete().eq('id', booking.id);
         if (error) throw error;
+
+        const updated = bookings.filter(b => b.id !== booking.id);
+        saveBookings(updated);
+        setBookings(updated);
+        setCancellingBooking(null);
 
         toast.success("Agendamento cancelado com sucesso no banco!");
       } catch (err: any) {
