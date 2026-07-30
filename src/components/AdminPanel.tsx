@@ -236,17 +236,41 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
       const dt = String(weekdayOrDate);
       const executeDelete = async () => {
         try {
-          const { error } = await supabase
+          const { data: existing, error: existErr } = await supabase
             .from('date_specific_slots')
-            .delete()
+            .select('id')
             .eq('selected_date', dt)
-            .eq('time', time)
-            .eq('barber_id', activeSlotsBarberId);
+            .eq('barber_id', activeSlotsBarberId)
+            .limit(1);
 
-          if (error) throw error;
+          if (existErr) throw existErr;
 
-          setDateSlots(dateSlots.filter(s => !(s.selected_date === dt && s.time === time && s.barber_id === activeSlotsBarberId)));
-          toast.success("Horário excluído do banco com sucesso!");
+          if (!existing || existing.length === 0) {
+            const defaultSlots = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];
+            const toInsert = defaultSlots
+               .filter(t => t !== time)
+               .map(t => ({ selected_date: dt, time: t, barber_id: activeSlotsBarberId }));
+            
+            const { error: insErr } = await supabase.from('date_specific_slots').insert(toInsert);
+            if (insErr) throw insErr;
+
+            let newSlots = [...dateSlots];
+            toInsert.forEach(s => newSlots.push(s));
+            setDateSlots(newSlots);
+            toast.success("Horário removido da grade padrão!");
+          } else {
+            const { error } = await supabase
+              .from('date_specific_slots')
+              .delete()
+              .eq('selected_date', dt)
+              .eq('time', time)
+              .eq('barber_id', activeSlotsBarberId);
+
+            if (error) throw error;
+
+            setDateSlots(dateSlots.filter(s => !(s.selected_date === dt && s.time === time && s.barber_id === activeSlotsBarberId)));
+            toast.success("Horário excluído do banco com sucesso!");
+          }
         } catch (err: any) {
           console.error(err);
           toast.error(err?.message || "Erro ao excluir o horário.");
@@ -1794,9 +1818,9 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                     <button
                       onClick={handleClearSlots}
                       className="w-full sm:w-auto px-4 py-3 bg-destructive/10 hover:bg-destructive/20 text-destructive text-xs font-bold rounded-xl border border-destructive/15 transition-all text-center"
-                      title={slotsMode === 'weekly' ? "Apagar todos os horários deste dia da semana" : "Apagar todos os horários desta data"}
+                      title={slotsMode === 'weekly' ? "Apagar todos os horários deste dia da semana" : "Limpar e restaurar horários padrão para esta data"}
                     >
-                      Limpar Dia / Bloquear Data
+                      Limpar Dia
                     </button>
                     
                     <button
@@ -1819,49 +1843,80 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                     Horários Ativos ({
                       slotsMode === 'weekly'
                         ? whitelistSlots.filter(s => s.weekday === selectedWeekday).length
-                        : dateSlots.filter(s => s.selected_date === selectedDateStr).length
+                        : (() => {
+                            const custom = dateSlots.filter(s => s.selected_date === selectedDateStr && s.barber_id === activeSlotsBarberId);
+                            return custom.length > 0 ? custom.length : 23; // 23 é o numero de slots padrao
+                          })()
                     })
                   </label>
                   
-                  {((slotsMode === 'weekly' 
-                    ? whitelistSlots.filter(s => s.weekday === selectedWeekday) 
-                    : dateSlots.filter(s => s.selected_date === selectedDateStr)
-                  ).length === 0) ? (
-                    <div className="text-center py-8 bg-background/20 rounded-xl border border-dashed border-primary/10">
-                      <Clock className="w-8 h-8 text-primary/40 mx-auto mb-2" />
-                      <p className="text-xs font-bold text-primary/90">
-                        Nenhum horário liberado para {slotsMode === 'weekly' ? 'este dia da semana' : 'esta data'} (Dia Fechado).
-                      </p>
-                      <p className="text-[11px] text-muted-foreground mt-1">
-                        Utilize o campo acima para selecionar o horário e clique em "+ Adicionar" para liberar novos horários.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      {(slotsMode === 'weekly' 
-                        ? whitelistSlots.filter(s => s.weekday === selectedWeekday).sort((a,b) => a.time.localeCompare(b.time))
-                        : dateSlots.filter(s => s.selected_date === selectedDateStr).sort((a,b) => a.time.localeCompare(b.time))
-                      ).map((slot, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 pl-3.5 pr-2 py-1.5 rounded-full text-sm font-semibold hover:bg-primary/15 transition-colors"
-                        >
-                          <span className="font-mono">{slot.time}</span>
-                          <button
-                            onClick={() => handleDeleteSlot(
-                              slotsMode === 'weekly' ? selectedWeekday : selectedDateStr, 
-                              slot.time, 
-                              slotsMode === 'specific'
-                            )}
-                            className="text-primary/60 hover:text-primary hover:bg-primary/20 rounded-full p-0.5 transition-colors"
-                            title="Remover horário"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                  {(() => {
+                    if (slotsMode === 'weekly') {
+                      const slots = whitelistSlots.filter(s => s.weekday === selectedWeekday);
+                      if (slots.length === 0) return (
+                        <div className="text-center py-8 bg-background/20 rounded-xl border border-dashed border-primary/10">
+                          <Clock className="w-8 h-8 text-primary/40 mx-auto mb-2" />
+                          <p className="text-xs font-bold text-primary/90">
+                            Nenhum horário configurado para este dia da semana.
+                          </p>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      );
+                      return (
+                        <div className="flex flex-wrap gap-2">
+                          {slots.sort((a,b) => a.time.localeCompare(b.time)).map((slot, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 pl-3.5 pr-2 py-1.5 rounded-full text-sm font-semibold hover:bg-primary/15 transition-colors"
+                            >
+                              <span className="font-mono">{slot.time}</span>
+                              <button
+                                onClick={() => handleDeleteSlot(selectedWeekday, slot.time, false)}
+                                className="text-primary/60 hover:text-primary hover:bg-primary/20 rounded-full p-0.5 transition-colors"
+                                title="Remover horário"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    } else {
+                      const customSlots = dateSlots.filter(s => s.selected_date === selectedDateStr && s.barber_id === activeSlotsBarberId);
+                      const defaultSlotsList = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];
+                      const displaySlots = customSlots.length > 0 
+                        ? customSlots 
+                        : defaultSlotsList.map(t => ({ selected_date: selectedDateStr, time: t, barber_id: activeSlotsBarberId }));
+                        
+                      if (displaySlots.length === 0) return (
+                        <div className="text-center py-8 bg-background/20 rounded-xl border border-dashed border-primary/10">
+                          <Clock className="w-8 h-8 text-primary/40 mx-auto mb-2" />
+                          <p className="text-xs font-bold text-primary/90">
+                            Nenhum horário liberado para esta data (Dia Fechado).
+                          </p>
+                        </div>
+                      );
+                      
+                      return (
+                        <div className="flex flex-wrap gap-2">
+                          {displaySlots.sort((a,b) => a.time.localeCompare(b.time)).map((slot, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 pl-3.5 pr-2 py-1.5 rounded-full text-sm font-semibold hover:bg-primary/15 transition-colors"
+                            >
+                              <span className="font-mono">{slot.time}</span>
+                              <button
+                                onClick={() => handleDeleteSlot(selectedDateStr, slot.time, true)}
+                                className="text-primary/60 hover:text-primary hover:bg-primary/20 rounded-full p-0.5 transition-colors"
+                                title="Remover horário"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+                  })()}
                 </div>
               </div>
             </div>
