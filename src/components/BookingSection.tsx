@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { toast } from 'sonner';
 import { SERVICES, isDayAllowed, WHATSAPP_NUMBER, generateWhatsAppUrl, formatPhone, getBookingDuration, ScheduleBlock, BARBERS, Booking, ClientSubscription } from '@/lib/types';
 import { addBooking, getBookings, getBlocks } from '@/lib/bookingStore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -326,22 +327,27 @@ const BookingSection = () => {
       }),
     })
       .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw errData;
+          throw data;
         }
-        return res.json();
+        return data;
       })
       .then((data) => {
-        console.log("Booking synced to Google Calendar:", data);
+        if (data && data.error) {
+          throw new Error(data.error);
+        }
+        console.log("Booking synced successfully:", data);
         finishBooking();
       })
       .catch((err) => {
-        console.error("Error syncing booking to Google Calendar:", err);
+        console.error("ERRO NO INSERT:", err);
         setIsSubmitting(false);
 
+        const errorMsg = err.message || err.error || "Ocorreu um erro ao salvar o agendamento. Por favor, tente novamente.";
+
         if (err && err.error === 'slot_occupied') {
-          alert(err.message || "Este horário acabou de ser preenchido, por favor selecione outro.");
+          toast.error(errorMsg);
           setStep(3);
           setSelectedTime('');
           
@@ -353,7 +359,7 @@ const BookingSection = () => {
             })
             .catch((fetchErr) => console.error("Error reloading events:", fetchErr));
         } else {
-          alert("Ocorreu um erro ao salvar o agendamento. Por favor, tente novamente.");
+          toast.error(errorMsg);
         }
       });
   };

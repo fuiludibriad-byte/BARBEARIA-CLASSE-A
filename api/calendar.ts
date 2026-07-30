@@ -571,6 +571,17 @@ export default async function handler(req: any, res: any) {
         }
         // ----------------------------------------------
 
+        /*
+          IMPORTANTE: Se você receber o erro 'new row violates row-level security',
+          execute as seguintes queries no SQL Editor do Supabase para liberar as permissões da tabela appointments:
+
+          ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
+          CREATE POLICY "Permitir leitura pública" ON appointments FOR SELECT USING (true);
+          CREATE POLICY "Permitir inserções públicas" ON appointments FOR INSERT WITH CHECK (true);
+          CREATE POLICY "Permitir update público" ON appointments FOR UPDATE USING (true);
+          CREATE POLICY "Permitir delete público" ON appointments FOR DELETE USING (true);
+        */
+
         // 1. Inserir no Supabase primeiro
         const { error: insertErr } = await supabase
           .from('appointments')
@@ -589,7 +600,10 @@ export default async function handler(req: any, res: any) {
             is_plan_usage: finalIsPlanUsage
           });
 
-        if (insertErr) throw insertErr;
+        if (insertErr) {
+          console.error("ERRO NO INSERT:", insertErr);
+          throw new Error(insertErr.message || "Erro no insert");
+        }
 
         // 1.5. Realizar o desconto do corte na tabela subscriptions
         if (subDataToDeduct) {
@@ -723,7 +737,10 @@ export default async function handler(req: any, res: any) {
             barber_id: block.barberId || 'luiz'
           });
 
-        if (insertErr) throw insertErr;
+        if (insertErr) {
+          console.error("ERRO NO INSERT:", insertErr);
+          throw new Error(insertErr.message || "Erro no insert");
+        }
 
         // 2. Criar no Google Calendar
         const title = `Bloqueio - ${block.reason || 'Indisponível'}`;
@@ -960,6 +977,9 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error: any) {
     console.error('Failsafe API Error:', error);
-    return res.status(200).json({ bookings: [], blocks: [], error: error.message || 'Internal Server Error' });
+    if (req.method === 'GET') {
+      return res.status(200).json({ bookings: [], blocks: [], error: error.message || 'Internal Server Error' });
+    }
+    return res.status(500).json({ error: error.message || 'Internal Server Error' });
   }
 }
