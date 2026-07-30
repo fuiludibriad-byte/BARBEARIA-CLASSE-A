@@ -106,19 +106,17 @@ const BookingSection = () => {
   const getAvailableSlotsForBarber = (barberId: string) => {
     if (!selectedDate || !selectedService) return [];
 
+    // Se for Domingo, retorne []
+    if (selectedDate.getDay() === 0) return [];
+
     const dateStr = format(selectedDate, 'dd/MM/yyyy');
-    const dateIsoStr = format(selectedDate, 'yyyy-MM-dd');
 
-    // Filter slots for this barber
-    const bWeekdaySlots = weekdaySlots.filter(s => s.barber_id === barberId);
-    const bDateSpecific = dateSlots.filter(s => s.selected_date === dateIsoStr && s.barber_id === barberId);
-
-    const bDateSpecificTimes = bDateSpecific.map(s => s.time);
-    const bWeekdaySpecificTimes = bWeekdaySlots.map(s => s.time);
-
-    const baseTimes = bDateSpecificTimes.length > 0 
-      ? bDateSpecificTimes 
-      : bWeekdaySpecificTimes;
+    // Horários padrão a cada 30 min das 09:00 às 19:30 (finaliza às 20:00)
+    const defaultSlots = [
+      '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
+      '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
+      '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'
+    ];
 
     const localBookings = getBookings().filter(
       (b) => b.date === dateStr && b.status !== 'completed' && (b.barberId || 'luiz') === barberId
@@ -157,17 +155,12 @@ const BookingSection = () => {
     const isToday = selectedDate.toDateString() === now.toDateString();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    return baseTimes.filter((timeStr) => {
+    return defaultSlots.filter((timeStr) => {
       const start = timeToMinutes(timeStr);
       const end = start + totalDuration;
 
-      // Filter out past times for today
+      // Filtra horários do dia de hoje que já passaram em relação à hora atual
       if (isToday && start < currentMinutes) {
-        return false;
-      }
-
-      // Check if the service starts before opening time (09:00 = 540 minutes)
-      if (start < 540) {
         return false;
       }
 
