@@ -175,22 +175,25 @@ function SubscriptionsTabContent() {
     }
   };
 
-  const handleCancel = async (id: string) => {
-    if (!confirm('Tem certeza que deseja cancelar e apagar este plano?')) return;
+  const handleHardDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Tem certeza que deseja excluir este plano? Esta ação é irreversível e o valor será removido do faturamento do caixa.')) return;
+    
     setProcessingId(id);
     try {
       const { error } = await supabase
         .from('subscriptions')
-        .update({ status: 'canceled' })
+        .delete()
         .eq('id', id);
         
       if (error) throw error;
 
-      toast.success('Plano cancelado com sucesso.');
+      toast.success('Plano excluído com sucesso.');
+      setSubscriptions(prev => prev.filter(s => s.id !== id)); // Atualização reativa (otimista)
       await fetchSubscriptions();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast.error('Erro ao cancelar o plano.');
+      toast.error(err?.message || 'Erro ao excluir o plano.');
     } finally {
       setProcessingId(null);
     }
@@ -424,10 +427,10 @@ function SubscriptionsTabContent() {
                               )}
                             </button>
                             <button 
-                              onClick={() => handleCancel(sub.id)}
-                              disabled={!isActive || processingId === sub.id}
+                              onClick={(e) => handleHardDelete(e, sub.id)}
+                              disabled={processingId === sub.id}
                               className="px-4 bg-destructive/10 text-destructive font-bold py-2.5 rounded-xl text-sm hover:bg-destructive hover:text-destructive-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Cancelar Plano"
+                              title="Excluir Plano"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
