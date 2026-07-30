@@ -152,42 +152,53 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
         return;
       }
       setIsSavingSlot(true);
-      // Optimistic update com inteligência de preenchimento
-      const defaultSlots = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];
-      const hasDate = dateSlots.some(s => s.selected_date === selectedDateStr && s.barber_id === activeSlotsBarberId);
-      let newSlots = [...dateSlots];
-      if (!hasDate) {
-         defaultSlots.forEach(t => newSlots.push({ selected_date: selectedDateStr, time: t, barber_id: activeSlotsBarberId }));
-      }
-      if (!newSlots.some(s => s.selected_date === selectedDateStr && s.time === newSlotTime && s.barber_id === activeSlotsBarberId)) {
-         newSlots.push({ selected_date: selectedDateStr, time: newSlotTime, barber_id: activeSlotsBarberId });
-      }
-      setDateSlots(newSlots);
+      const executeSave = async () => {
+        setIsSavingSlot(true);
+        try {
+          const { data: existing, error: existErr } = await supabase
+            .from('date_specific_slots')
+            .select('id')
+            .eq('selected_date', selectedDateStr)
+            .eq('barber_id', activeSlotsBarberId)
+            .limit(1);
 
-      fetch('/api/calendar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'add_date_slot', selected_date: selectedDateStr, time: newSlotTime, barberId: activeSlotsBarberId })
-      })
-        .then(async (res) => {
-          if (!res.ok) throw new Error('Erro no servidor');
-          return res.json();
-        })
-        .then((data) => {
+          if (existErr) throw existErr;
+
+          let newSlots = [...dateSlots];
+          
+          if (!existing || existing.length === 0) {
+            const defaultSlots = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];
+            const toInsert = defaultSlots.map(t => ({ selected_date: selectedDateStr, time: t, barber_id: activeSlotsBarberId }));
+            if (!defaultSlots.includes(newSlotTime)) {
+              toInsert.push({ selected_date: selectedDateStr, time: newSlotTime, barber_id: activeSlotsBarberId });
+            }
+            const { error: insErr } = await supabase.from('date_specific_slots').insert(toInsert);
+            if (insErr) throw insErr;
+            
+            toInsert.forEach(s => {
+              if (!newSlots.some(ns => ns.selected_date === s.selected_date && ns.time === s.time && ns.barber_id === s.barber_id)) {
+                newSlots.push(s);
+              }
+            });
+          } else {
+            const { error: insErr } = await supabase.from('date_specific_slots').insert([{ selected_date: selectedDateStr, time: newSlotTime, barber_id: activeSlotsBarberId }]);
+            if (insErr && insErr.code !== '23505') throw insErr;
+            if (!newSlots.some(ns => ns.selected_date === selectedDateStr && ns.time === newSlotTime && ns.barber_id === activeSlotsBarberId)) {
+               newSlots.push({ selected_date: selectedDateStr, time: newSlotTime, barber_id: activeSlotsBarberId });
+            }
+          }
+          
+          setDateSlots(newSlots);
           toast.success("Horário adicionado com sucesso!");
-          if (Array.isArray(data.weekdaySlots)) {
-            setWhitelistSlots(data.weekdaySlots);
-          }
-          if (Array.isArray(data.dateSpecificSlots)) {
-            setDateSlots(data.dateSpecificSlots);
-          }
-        })
-        .catch((err) => {
+        } catch (err: any) {
           console.error(err);
-          toast.error("Erro ao sincronizar com o servidor.");
-          reload();
-        })
-        .finally(() => setIsSavingSlot(false));
+          toast.error(err?.message || "Erro ao salvar horário no banco.");
+        } finally {
+          setIsSavingSlot(false);
+        }
+      };
+      
+      executeSave();
     }
   };
 
@@ -222,32 +233,26 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
         });
     } else {
       const dt = String(weekdayOrDate);
-      // Optimistic update
-      setDateSlots(dateSlots.filter(s => !(s.selected_date === dt && s.time === time)));
+      const executeDelete = async () => {
+        try {
+          const { error } = await supabase
+            .from('date_specific_slots')
+            .delete()
+            .eq('selected_date', dt)
+            .eq('time', time)
+            .eq('barber_id', activeSlotsBarberId);
 
-      fetch('/api/calendar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'delete_date_slot', selected_date: dt, time, barberId: activeSlotsBarberId })
-      })
-        .then(async (res) => {
-          if (!res.ok) throw new Error('Erro no servidor');
-          return res.json();
-        })
-        .then((data) => {
-          toast.success("Horário excluído!");
-          if (Array.isArray(data.weekdaySlots)) {
-            setWhitelistSlots(data.weekdaySlots);
-          }
-          if (Array.isArray(data.dateSpecificSlots)) {
-            setDateSlots(data.dateSpecificSlots);
-          }
-        })
-        .catch((err) => {
+          if (error) throw error;
+
+          setDateSlots(dateSlots.filter(s => !(s.selected_date === dt && s.time === time && s.barber_id === activeSlotsBarberId)));
+          toast.success("Horário excluído do banco com sucesso!");
+        } catch (err: any) {
           console.error(err);
-          toast.error("Erro ao sincronizar exclusão.");
-          reload();
-        });
+          toast.error(err?.message || "Erro ao excluir o horário.");
+        }
+      };
+      
+      executeDelete();
     }
   };
 
@@ -283,32 +288,25 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     } else {
       const formattedDate = selectedDateStr.split('-').reverse().join('/');
       if (!window.confirm(`Deseja realmente limpar todos os horários do dia ${formattedDate}?`)) return;
-      // Optimistic update
-      setDateSlots(dateSlots.filter(s => s.selected_date !== selectedDateStr));
+      const executeClear = async () => {
+        try {
+          const { error } = await supabase
+            .from('date_specific_slots')
+            .delete()
+            .eq('selected_date', selectedDateStr)
+            .eq('barber_id', activeSlotsBarberId);
 
-      fetch('/api/calendar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'clear_date_slots', selected_date: selectedDateStr, barberId: activeSlotsBarberId })
-      })
-        .then(async (res) => {
-          if (!res.ok) throw new Error('Erro no servidor');
-          return res.json();
-        })
-        .then((data) => {
-          toast.success("Grade limpa!");
-          if (Array.isArray(data.weekdaySlots)) {
-            setWhitelistSlots(data.weekdaySlots);
-          }
-          if (Array.isArray(data.dateSpecificSlots)) {
-            setDateSlots(data.dateSpecificSlots);
-          }
-        })
-        .catch((err) => {
+          if (error) throw error;
+
+          setDateSlots(dateSlots.filter(s => !(s.selected_date === selectedDateStr && s.barber_id === activeSlotsBarberId)));
+          toast.success("Grade do dia limpa com sucesso do banco!");
+        } catch (err: any) {
           console.error(err);
-          toast.error("Erro ao sincronizar limpeza.");
-          reload();
-        });
+          toast.error(err?.message || "Erro ao limpar horários.");
+        }
+      };
+
+      executeClear();
     }
   };
 
@@ -653,18 +651,18 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     setBookings(updated);
     setRefusingId(null);
 
-    // Sync cancellation/deletion to Google Calendar
-    fetch(`/api/calendar?id=${booking.id}`, {
-      method: 'DELETE',
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error('Falha ao excluir agendamento');
-        console.log("Booking deleted from Google Calendar");
-        reload();
-      })
-      .catch((err) => {
-        console.error("Error deleting booking in Google Calendar:", err);
-      });
+    const executeRefuse = async () => {
+      try {
+        const { error } = await supabase.from('appointments').delete().eq('id', booking.id);
+        if (error) throw error;
+        
+        toast.success("Agendamento recusado com sucesso.");
+      } catch (err: any) {
+        console.error(err);
+        toast.error(err?.message || "Erro ao excluir agendamento do banco.");
+      }
+    };
+    executeRefuse();
   };
 
   // Cancel/delete booking from admin panel (sets state to show custom modal)
@@ -682,25 +680,34 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     setBookings(updated);
     setCancellingBooking(null);
 
-    fetch(`/api/calendar?id=${booking.id}`, {
-      method: 'DELETE',
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error('Falha ao excluir agendamento');
-        console.log("Booking deleted from Google Calendar");
-        toast.success('Agendamento cancelado com sucesso!');
-        reload();
-      })
-      .catch((err) => {
-        console.error("Error deleting booking in Google Calendar:", err);
-        toast.error('Erro ao cancelar agendamento.');
-      });
+    const executeConfirmCancel = async () => {
+      try {
+        const { error } = await supabase.from('appointments').delete().eq('id', booking.id);
+        if (error) throw error;
+
+        toast.success("Agendamento cancelado com sucesso no banco!");
+      } catch (err: any) {
+        console.error(err);
+        toast.error(err?.message || "Erro ao cancelar agendamento do banco.");
+      }
+    };
+    executeConfirmCancel();
   };
 
   // Delete completed service
-  const handleDeleteCompleted = (id: string) => {
-    removeCompleted(id);
-    setCompleted(getCompleted());
+  const handleDeleteCompleted = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja apagar este histórico de serviço concluído do banco?')) return;
+    try {
+      const { error } = await supabase.from('appointments').delete().eq('id', id);
+      if (error) throw error;
+      
+      removeCompleted(id);
+      setCompleted(getCompleted());
+      toast.success("Histórico excluído com sucesso do banco.");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || "Erro ao excluir histórico de agendamento.");
+    }
   };
 
   // Start editing a completed service
