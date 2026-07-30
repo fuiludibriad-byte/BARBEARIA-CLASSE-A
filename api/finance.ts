@@ -107,7 +107,7 @@ export default async function handler(req: any, res: any) {
       const { data: appointments, error: appErr } = await supabase
         .from('appointments')
         .select('*')
-        .in('status', ['accepted', 'completed']) // Apenas confirmados/concluidos
+        .in('status', ['completed']) // Apenas concluidos
         .gte('data_hora_inicio', startDateIso)
         .lte('data_hora_inicio', endDateIso);
 

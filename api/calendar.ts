@@ -206,13 +206,15 @@ export default async function handler(req: any, res: any) {
             bookings.push({
               id: item.id,
               service: item.servico_nome || '',
-              price: getServicePrice(item.servico_nome || ''),
+              price: item.price !== null && item.price !== undefined ? Number(item.price) : getServicePrice(item.servico_nome || ''),
               date: parsedStart ? parsedStart.date : '',
               time: parsedStart ? parsedStart.time : '',
               name: item.cliente_nome || '',
               phone: item.cliente_telefone || '',
               status: item.status,
-              barberId: item.barber_id || 'luiz'
+              barberId: item.barber_id || 'luiz',
+              is_plan_usage: item.is_plan_usage,
+              is_settled: item.is_settled
             });
           }
         }
@@ -257,13 +259,15 @@ export default async function handler(req: any, res: any) {
             bookings.push({
               id: item.id,
               service: item.servico_nome || '',
-              price: getServicePrice(item.servico_nome || ''),
+              price: item.price !== null && item.price !== undefined ? Number(item.price) : getServicePrice(item.servico_nome || ''),
               date: parsedStart ? parsedStart.date : '',
               time: parsedStart ? parsedStart.time : '',
               name: item.cliente_nome || '',
               phone: item.cliente_telefone || '',
               status: item.status,
-              barberId: item.barber_id || 'luiz'
+              barberId: item.barber_id || 'luiz',
+              is_plan_usage: item.is_plan_usage,
+              is_settled: item.is_settled
             });
           }
         }
@@ -817,7 +821,9 @@ export default async function handler(req: any, res: any) {
             data_hora_inicio: startDateTime,
             data_hora_fim: endDateTime,
             status: booking.status,
-            barber_id: booking.barberId || 'luiz'
+            barber_id: booking.barberId || 'luiz',
+            price: booking.price !== undefined ? booking.price : undefined,
+            is_plan_usage: booking.is_plan_usage !== undefined ? booking.is_plan_usage : undefined
           })
           .eq('id', id);
 
