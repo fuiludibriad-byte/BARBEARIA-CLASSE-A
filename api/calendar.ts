@@ -168,182 +168,51 @@ export default async function handler(req: any, res: any) {
       const timeMax = new Date(now.getFullYear(), now.getMonth() + 3, 1).toISOString();
 
       if (req.query.realtime === 'true') {
-        // ----------------------------------------------------
-        // REALTIME: Consultar Google Calendar diretamente (camada extra de validação)
-        // ----------------------------------------------------
-        const response = await calendar.events.list({
-          calendarId: activeCalendarId,
-          timeMin,
-          timeMax,
-          singleEvents: true,
-          orderBy: 'startTime',
-        });
+        const reqBarberId = req.query.barberId as string;
+        const filterBarberId = (reqBarberId && reqBarberId !== 'qualquer') ? reqBarberId : undefined;
 
-        const events = response.data.items || [];
+        let queryApp = supabase.from('appointments').select('*').neq('status', 'cancelled');
+        if (filterBarberId) {
+          queryApp = queryApp.eq('barber_id', filterBarberId);
+        }
+
+        const { data: dbEvents, error: dbError } = await queryApp
+          .gte('data_hora_inicio', timeMin)
+          .lte('data_hora_inicio', timeMax);
+
+        if (dbError) {
+          console.error("Supabase query error in realtime check:", dbError);
+          return res.status(200).json({ bookings: [], blocks: [], weekdaySlots, dateSpecificSlots, db_disabled: true });
+        }
+
         const bookings: any[] = [];
         const blocks: any[] = [];
 
-        const reqBarberId = req.query.barberId as string;
-        const filterBarberId = (reqBarberId && reqBarberId !== 'qualquer') ? reqBarberId : undefined;
-        
-        for (const event of events) {
-          if (!event.id) continue;
+        for (const item of dbEvents || []) {
+          const parsedStart = parseDateTimeToSaoPaulo(item.data_hora_inicio);
+          const parsedEnd = parseDateTimeToSaoPaulo(item.data_hora_fim);
 
-          const shared = event.extendedProperties?.shared;
-          const eventBarberId = shared?.barberId || '';
-          if (filterBarberId) {
-            const effectiveBarberId = eventBarberId || 'luiz';
-            if (effectiveBarberId !== filterBarberId) {
-              continue;
-            }
-          }
-          const summary = event.summary || '';
-          const summaryLower = summary.toLowerCase();
-
-          const hasBlockKeyword = summaryLower.includes('folga') || 
-                                  summaryLower.includes('bloqueado') || 
-                                  summaryLower.includes('bloqueio') ||
-                                  summaryLower.includes('indisponível') ||
-                                  summaryLower.includes('indisponivel');
-          
-          const hasDashSeparator = summary.includes(' - ');
-          const isBlock = shared?.type === 'block' || hasBlockKeyword || !hasDashSeparator;
-          const endStr = event.end?.dateTime || event.end?.date;
-          const endDate = endStr ? new Date(endStr) : new Date();
-          const isPast = endDate.getTime() < now.getTime();
-
-          if (isBlock) {
-            const allDay = shared?.allDay === 'true' || !!event.start?.date;
-            let startVal = shared?.start;
-            let endVal = shared?.end;
-            let dateVal = shared?.date || '';
-
-            if (!allDay && event.start?.dateTime && event.end?.dateTime) {
-              const parsedStart = parseDateTimeToSaoPaulo(event.start.dateTime);
-              const parsedEnd = parseDateTimeToSaoPaulo(event.end.dateTime);
-              if (parsedStart && parsedEnd) {
-                dateVal = parsedStart.date;
-                startVal = parsedStart.time;
-                endVal = parsedEnd.time;
-              }
-            }
-
-            if (!dateVal) {
-              const startString = event.start?.date || event.start?.dateTime;
-              if (startString) {
-                const [y, m, d] = startString.split('T')[0].split('-');
-                dateVal = `${d}/${m}/${y}`;
-              }
-            }
-            if (!dateVal) {
-              const dObj = new Date();
-              const pad = (n: number) => String(n).padStart(2, '0');
-              dateVal = `${pad(dObj.getDate())}/${pad(dObj.getMonth() + 1)}/${dObj.getFullYear()}`;
-            }
-
+          if (item.status === 'blocked') {
             blocks.push({
-              id: shared?.id || event.id,
-              date: shared?.date || dateVal,
-              allDay,
-              start: shared?.start || startVal,
-              end: shared?.end || endVal,
-              reason: shared?.reason || summary.replace(/^(Bloqueio - |AGENDA BLOQUEADA - )/i, '') || 'Bloqueio',
+              id: item.id,
+              date: parsedStart ? parsedStart.date : '',
+              allDay: item.duracao_minutos >= 1440,
+              start: parsedStart ? parsedStart.time : '',
+              end: parsedEnd ? parsedEnd.time : '',
+              reason: item.servico_nome || 'Bloqueio',
+              barberId: item.barber_id || 'luiz'
             });
           } else {
-            let service = '';
-            let name = 'Cliente Google';
-            let phone = '';
-            let price = 0;
-            let status = 'accepted';
-
-            if (shared) {
-              service = shared.service || '';
-              name = shared.name || '';
-              phone = shared.phone || '';
-            } else {
-              const parts = summary.split(' - ');
-              if (parts.length >= 2) {
-                service = parts.slice(0, -1).join(' - ').trim();
-                name = parts[parts.length - 1].trim();
-              } else {
-                service = summary;
-              }
-            }
-
-            if (shared?.price) {
-              price = Number(shared.price);
-            } else {
-              const desc = event.description || '';
-              const priceDescMatch = desc.match(/Valor:\s*R\$\s*(\d+)/i) || desc.match(/Valor:\s*(\d+)/i);
-              if (priceDescMatch) {
-                price = Number(priceDescMatch[1]);
-              } else {
-                const rsMatch = summary.match(/R\$\s*(\d+)(?:[.,]\d+)?/i);
-                if (rsMatch) {
-                  price = Number(rsMatch[1]);
-                } else {
-                  const numMatch = summary.match(/\b(\d+)\b/);
-                  if (numMatch) {
-                    price = Number(numMatch[1]);
-                  }
-                }
-              }
-
-              if (price === 0 && service) {
-                price = getServicePrice(service);
-              }
-            }
-
-            if (isPast) {
-              status = 'completed';
-            } else {
-              let parsedStatus = 'accepted';
-              if (shared?.status) {
-                parsedStatus = shared.status;
-              } else {
-                const desc = event.description || '';
-                const statusMatch = desc.match(/Status:\s*(.*)/i);
-                if (statusMatch) {
-                  parsedStatus = statusMatch[1].trim();
-                } else if (summary.includes('[Confirmado]')) {
-                  parsedStatus = 'accepted';
-                } else if (summary.includes('[Concluído]')) {
-                  parsedStatus = 'completed';
-                }
-              }
-              status = parsedStatus === 'completed' ? 'completed' : 'accepted';
-            }
-
-            let dateVal = '';
-            let timeVal = '';
-
-            if (event.start?.dateTime) {
-              const parsed = parseDateTimeToSaoPaulo(event.start.dateTime);
-              if (parsed) {
-                dateVal = parsed.date;
-                timeVal = parsed.time;
-              }
-            } else if (event.start?.date) {
-              const [y, m, d] = event.start.date.split('-');
-              dateVal = `${d}/${m}/${y}`;
-              timeVal = '08:00';
-            }
-
-            if (!dateVal) {
-              const dObj = new Date();
-              const pad = (n: number) => String(n).padStart(2, '0');
-              dateVal = `${pad(dObj.getDate())}/${pad(dObj.getMonth() + 1)}/${dObj.getFullYear()}`;
-            }
-
             bookings.push({
-              id: shared?.id || event.id,
-              service,
-              price,
-              date: shared?.date || dateVal,
-              time: shared?.time || timeVal,
-              name,
-              phone,
-              status,
+              id: item.id,
+              service: item.servico_nome || '',
+              price: getServicePrice(item.servico_nome || ''),
+              date: parsedStart ? parsedStart.date : '',
+              time: parsedStart ? parsedStart.time : '',
+              name: item.cliente_nome || '',
+              phone: item.cliente_telefone || '',
+              status: item.status,
+              barberId: item.barber_id || 'luiz'
             });
           }
         }
@@ -382,6 +251,7 @@ export default async function handler(req: any, res: any) {
               start: parsedStart ? parsedStart.time : '',
               end: parsedEnd ? parsedEnd.time : '',
               reason: item.servico_nome || 'Bloqueio',
+              barberId: item.barber_id || 'luiz'
             });
           } else {
             bookings.push({
@@ -393,6 +263,7 @@ export default async function handler(req: any, res: any) {
               name: item.cliente_nome || '',
               phone: item.cliente_telefone || '',
               status: item.status,
+              barberId: item.barber_id || 'luiz'
             });
           }
         }
@@ -784,30 +655,34 @@ export default async function handler(req: any, res: any) {
         const planoText = finalIsPlanUsage ? '\n[Pago via Assinatura]' : '';
         const description = `Cliente: ${booking.name}\nContato: ${booking.phone}\nValor: R$ ${finalPrice},00\nBarbeiro: ${barberName}${planoText}`;
 
-        await calendar.events.insert({
-          calendarId: activeCalendarId,
-          requestBody: {
-            id: eventId,
-            summary: title,
-            description,
-            start: { dateTime: startDateTime, timeZone: 'America/Sao_Paulo' },
-            end: { dateTime: new Date(endMs).toISOString(), timeZone: 'America/Sao_Paulo' },
-            extendedProperties: {
-              shared: {
-                id,
-                type: 'booking',
-                service: booking.service,
-                name: booking.name,
-                phone: booking.phone,
-                price: String(finalPrice),
-                status: booking.status,
-                date: booking.date,
-                time: booking.time,
-                barberId: booking.barberId || 'luiz',
+        try {
+          await calendar.events.insert({
+            calendarId: activeCalendarId,
+            requestBody: {
+              id: eventId,
+              summary: title,
+              description,
+              start: { dateTime: startDateTime, timeZone: 'America/Sao_Paulo' },
+              end: { dateTime: new Date(endMs).toISOString(), timeZone: 'America/Sao_Paulo' },
+              extendedProperties: {
+                shared: {
+                  id,
+                  type: 'booking',
+                  service: booking.service,
+                  name: booking.name,
+                  phone: booking.phone,
+                  price: String(finalPrice),
+                  status: booking.status,
+                  date: booking.date,
+                  time: booking.time,
+                  barberId: booking.barberId || 'luiz',
+                },
               },
             },
-          },
-        });
+          });
+        } catch (gErr) {
+          console.warn("Failsafe: Falha ao espelhar agendamento no Google Calendar:", gErr);
+        }
 
         return res.status(201).json({ success: true, eventId });
       }
@@ -867,28 +742,32 @@ export default async function handler(req: any, res: any) {
           end = { dateTime: endDateTime, timeZone: 'America/Sao_Paulo' };
         }
 
-        await calendar.events.insert({
-          calendarId: activeCalendarId,
-          requestBody: {
-            id: eventId,
-            summary: title,
-            description: `Bloqueio de Agenda\nMotivo: ${block.reason}`,
-            start,
-            end,
-            extendedProperties: {
-              shared: {
-                id,
-                type: 'block',
-                reason: block.reason,
-                date: block.date,
-                allDay: String(block.allDay),
-                start: block.start || '',
-                end: block.end || '',
-                barberId: block.barberId || 'luiz',
+        try {
+          await calendar.events.insert({
+            calendarId: activeCalendarId,
+            requestBody: {
+              id: eventId,
+              summary: title,
+              description: `Bloqueio de Agenda\nMotivo: ${block.reason}`,
+              start,
+              end,
+              extendedProperties: {
+                shared: {
+                  id,
+                  type: 'block',
+                  reason: block.reason,
+                  date: block.date,
+                  allDay: String(block.allDay),
+                  start: block.start || '',
+                  end: block.end || '',
+                  barberId: block.barberId || 'luiz',
+                },
               },
             },
-          },
-        });
+          });
+        } catch (gErr) {
+          console.warn("Failsafe: Falha ao espelhar bloqueio no Google Calendar:", gErr);
+        }
 
         return res.status(201).json({ success: true, eventId });
       }
@@ -936,30 +815,34 @@ export default async function handler(req: any, res: any) {
         const barberName = booking.barberId === 'vitinho' ? 'Vitinho' : 'Luiz';
         const description = `Cliente: ${booking.name}\nContato: ${booking.phone}\nValor: R$ ${booking.price},00\nBarbeiro: ${barberName}`;
 
-        await calendar.events.update({
-          calendarId: activeCalendarId,
-          eventId,
-          requestBody: {
-            summary: title,
-            description,
-            start: { dateTime: startDateTime, timeZone: 'America/Sao_Paulo' },
-            end: { dateTime: new Date(endMs).toISOString(), timeZone: 'America/Sao_Paulo' },
-            extendedProperties: {
-              shared: {
-                id,
-                type: 'booking',
-                service: booking.service,
-                name: booking.name,
-                phone: booking.phone,
-                price: String(booking.price),
-                status: booking.status,
-                date: booking.date,
-                time: booking.time,
-                barberId: booking.barberId || 'luiz',
+        try {
+          await calendar.events.update({
+            calendarId: activeCalendarId,
+            eventId,
+            requestBody: {
+              summary: title,
+              description,
+              start: { dateTime: startDateTime, timeZone: 'America/Sao_Paulo' },
+              end: { dateTime: new Date(endMs).toISOString(), timeZone: 'America/Sao_Paulo' },
+              extendedProperties: {
+                shared: {
+                  id,
+                  type: 'booking',
+                  service: booking.service,
+                  name: booking.name,
+                  phone: booking.phone,
+                  price: String(booking.price),
+                  status: booking.status,
+                  date: booking.date,
+                  time: booking.time,
+                  barberId: booking.barberId || 'luiz',
+                },
               },
             },
-          },
-        });
+          });
+        } catch (gErr) {
+          console.warn("Failsafe: Falha ao atualizar agendamento no Google Calendar:", gErr);
+        }
 
         return res.status(200).json({ success: true });
       }
@@ -1012,28 +895,32 @@ export default async function handler(req: any, res: any) {
           end = { dateTime: endDateTime, timeZone: 'America/Sao_Paulo' };
         }
 
-        await calendar.events.update({
-          calendarId: activeCalendarId,
-          eventId,
-          requestBody: {
-            summary: title,
-            description: `Bloqueio de Agenda\nMotivo: ${block.reason}`,
-            start,
-            end,
-            extendedProperties: {
-              shared: {
-                id,
-                type: 'block',
-                reason: block.reason,
-                date: block.date,
-                allDay: String(block.allDay),
-                start: block.start || '',
-                end: block.end || '',
-                barberId: block.barberId || 'luiz',
+        try {
+          await calendar.events.update({
+            calendarId: activeCalendarId,
+            eventId,
+            requestBody: {
+              summary: title,
+              description: `Bloqueio de Agenda\nMotivo: ${block.reason}`,
+              start,
+              end,
+              extendedProperties: {
+                shared: {
+                  id,
+                  type: 'block',
+                  reason: block.reason,
+                  date: block.date,
+                  allDay: String(block.allDay),
+                  start: block.start || '',
+                  end: block.end || '',
+                  barberId: block.barberId || 'luiz',
+                },
               },
             },
-          },
-        });
+          });
+        } catch (gErr) {
+          console.warn("Failsafe: Falha ao atualizar bloqueio no Google Calendar:", gErr);
+        }
 
         return res.status(200).json({ success: true });
       }
@@ -1064,9 +951,7 @@ export default async function handler(req: any, res: any) {
           eventId,
         });
       } catch (err: any) {
-        if (err.code !== 404) {
-          throw err;
-        }
+        console.warn("Failsafe: Falha ao excluir do Google Calendar:", err);
       }
 
       return res.status(200).json({ success: true });
@@ -1074,7 +959,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(405).json({ error: 'Method not allowed' });
   } catch (error: any) {
-    console.error('Google Calendar Sync Error:', error);
-    return res.status(500).json({ error: error.message || 'Internal Server Error' });
+    console.error('Failsafe API Error:', error);
+    return res.status(200).json({ bookings: [], blocks: [], error: error.message || 'Internal Server Error' });
   }
 }
