@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { SERVICES, isDayAllowed, WHATSAPP_NUMBER, generateWhatsAppUrl, formatPhone, getBookingDuration, ScheduleBlock, BARBERS, Booking, ClientSubscription } from '@/lib/types';
 import { addBooking, getBookings, getBlocks } from '@/lib/bookingStore';
@@ -318,54 +319,80 @@ const BookingSection = () => {
       setPhone('');
     };
 
-    // Sync to Google Calendar
-    fetch('/api/calendar', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        type: 'booking',
-        booking,
-        duration: totalDuration,
-      }),
-    })
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw data;
+    const executeBooking = async () => {
+      try {
+        let finalPrice = booking.price;
+        let finalIsPlanUsage = booking.is_plan_usage;
+        let subToUpdate: { id: string, used_cuts: number, total_cuts: number, plan_type: string } | null = null;
+
+        if (booking.phone) {
+          const cleanPhone = booking.phone.replace(/\D/g, '');
+          const { data: subData, error: subErr } = await supabase
+            .from('subscriptions')
+            .select('id, used_cuts, total_cuts, plan_type')
+            .eq('client_phone', cleanPhone)
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (!subErr && subData && subData.used_cuts < subData.total_cuts) {
+            finalPrice = 0;
+            finalIsPlanUsage = true;
+            subToUpdate = subData as any;
+            booking.price = 0;
+            booking.is_plan_usage = true;
+          }
         }
-        return data;
-      })
-      .then((data) => {
-        if (data && data.error) {
-          throw new Error(data.error);
+
+        const [d, m, y] = booking.date.split('/');
+        const isoDate = `${y}-${m}-${d}`;
+        const startDateTime = `${isoDate}T${booking.time}:00-03:00`;
+        const startMs = new Date(startDateTime).getTime();
+        const endDateTime = new Date(startMs + (totalDuration || 180) * 60 * 1000).toISOString();
+
+        const { error: insertErr } = await supabase
+          .from('appointments')
+          .insert({
+            id: booking.id,
+            cliente_nome: booking.name,
+            cliente_telefone: booking.phone,
+            servico_nome: booking.service,
+            duracao_minutos: totalDuration || 180,
+            data_hora_inicio: startDateTime,
+            data_hora_fim: endDateTime,
+            status: booking.status,
+            barber_id: booking.barberId,
+            price: finalPrice,
+            is_plan_usage: finalIsPlanUsage
+          });
+
+        if (insertErr) {
+          throw new Error(insertErr.message || "Erro no banco de dados ao salvar agendamento.");
         }
-        console.log("Booking synced successfully:", data);
+
+        if (subToUpdate) {
+           const { error: updateSubErr } = await supabase
+             .from('subscriptions')
+             .update({ used_cuts: subToUpdate.used_cuts + 1 })
+             .eq('id', subToUpdate.id);
+             
+           if (updateSubErr) {
+             console.error("Erro ao abater corte do plano:", updateSubErr);
+           }
+        }
+
+        console.log("Booking saved successfully to Supabase");
         finishBooking();
-      })
-      .catch((err) => {
+      } catch (err: any) {
         console.error("ERRO NO INSERT:", err);
         setIsSubmitting(false);
+        const errorMsg = err?.message || err?.error || "Erro ao validar plano. Tente novamente.";
+        toast.error(errorMsg);
+      }
+    };
 
-        const errorMsg = err.message || err.error || "Ocorreu um erro ao salvar o agendamento. Por favor, tente novamente.";
-
-        if (err && err.error === 'slot_occupied') {
-          toast.error(errorMsg);
-          setStep(3);
-          setSelectedTime('');
-          
-          fetch(`/api/calendar?realtime=true&barberId=${selectedBarberId}`)
-            .then((res) => res.json())
-            .then((data) => {
-              if (Array.isArray(data.bookings)) setGoogleBookings(data.bookings);
-              if (Array.isArray(data.blocks)) setGoogleBlocks(data.blocks);
-            })
-            .catch((fetchErr) => console.error("Error reloading events:", fetchErr));
-        } else {
-          toast.error(errorMsg);
-        }
-      });
+    executeBooking();
   };
 
   const goBack = () => {
