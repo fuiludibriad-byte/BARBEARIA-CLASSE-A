@@ -88,7 +88,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
   // Slots Whitelist editor state
   const [whitelistSlots, setWhitelistSlots] = useState<{ id?: string; weekday: number; time: string }[]>([]);
   const [dateSlots, setDateSlots] = useState<{ id?: string; selected_date: string; time: string }[]>([]);
-  const [slotsMode, setSlotsMode] = useState<'weekly' | 'specific'>('weekly');
+  const [slotsMode, setSlotsMode] = useState<'weekly' | 'specific'>('specific');
   const [selectedWeekday, setSelectedWeekday] = useState<number>(1);
   const [selectedDateStr, setSelectedDateStr] = useState<string>(new Date().toISOString().split('T')[0]);
   const [newSlotTime, setNewSlotTime] = useState<string>('09:00');
@@ -147,13 +147,22 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
         })
         .finally(() => setIsSavingSlot(false));
     } else {
-      if (dateSlots.some(s => s.selected_date === selectedDateStr && s.time === newSlotTime)) {
+      if (dateSlots.some(s => s.selected_date === selectedDateStr && s.time === newSlotTime && s.barber_id === activeSlotsBarberId)) {
         toast.warning("Este horário já está cadastrado para esta data.");
         return;
       }
       setIsSavingSlot(true);
-      // Optimistic update
-      setDateSlots([...dateSlots, { selected_date: selectedDateStr, time: newSlotTime }]);
+      // Optimistic update com inteligência de preenchimento
+      const defaultSlots = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];
+      const hasDate = dateSlots.some(s => s.selected_date === selectedDateStr && s.barber_id === activeSlotsBarberId);
+      let newSlots = [...dateSlots];
+      if (!hasDate) {
+         defaultSlots.forEach(t => newSlots.push({ selected_date: selectedDateStr, time: t, barber_id: activeSlotsBarberId }));
+      }
+      if (!newSlots.some(s => s.selected_date === selectedDateStr && s.time === newSlotTime && s.barber_id === activeSlotsBarberId)) {
+         newSlots.push({ selected_date: selectedDateStr, time: newSlotTime, barber_id: activeSlotsBarberId });
+      }
+      setDateSlots(newSlots);
 
       fetch('/api/calendar', {
         method: 'POST',
@@ -1717,29 +1726,8 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                   </div>
                 )}
 
-                {/* Seletor de Modo: Semanal vs Exceção por Data */}
-                <div className="flex gap-2 p-1 bg-background/50 rounded-xl border border-primary/10 max-w-sm">
-                  <button
-                    onClick={() => setSlotsMode('weekly')}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                      slotsMode === 'weekly'
-                        ? 'bg-primary text-primary-foreground shadow-[0_2px_8px_hsl(var(--primary)/0.25)]'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Grade Semanal
-                  </button>
-                  <button
-                    onClick={() => setSlotsMode('specific')}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
-                      slotsMode === 'specific'
-                        ? 'bg-primary text-primary-foreground shadow-[0_2px_8px_hsl(var(--primary)/0.25)]'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Datas Específicas
-                  </button>
-                </div>
+                {/* Seletor de Modo: Ocultado pois a barbearia usará apenas Datas Específicas */}
+                <div style={{ display: 'none' }}></div>
 
                 {slotsMode === 'weekly' ? (
                   /* Seleção do Dia da Semana */

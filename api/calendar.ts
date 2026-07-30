@@ -379,16 +379,36 @@ export default async function handler(req: any, res: any) {
       if (type === 'add_date_slot') {
         const { selected_date, time, barberId } = req.body;
         try {
-          const { error } = await supabase
+          // Check if any slot exists for this date and barber
+          const { data: existing, error: existErr } = await supabase
             .from('date_specific_slots')
-            .insert([{ selected_date, time, barber_id: barberId }], { onConflict: 'barber_id,selected_date,time', ignoreDuplicates: true });
-          
-          if (error) throw error;
+            .select('id')
+            .eq('selected_date', selected_date)
+            .eq('barber_id', barberId)
+            .limit(1);
+
+          if (existErr) throw existErr;
+
+          if (!existing || existing.length === 0) {
+            // Bulk insert default + the new one if not included
+            const defaultSlots = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30', '20:00'];
+            const toInsert = defaultSlots.map(t => ({ selected_date, time: t, barber_id: barberId }));
+            if (!defaultSlots.includes(time)) {
+              toInsert.push({ selected_date, time, barber_id: barberId });
+            }
+            const { error: insErr } = await supabase.from('date_specific_slots').insert(toInsert);
+            if (insErr) throw insErr;
+          } else {
+            // Just insert the new one
+            const { error: insErr } = await supabase.from('date_specific_slots').insert([{ selected_date, time, barber_id: barberId }]);
+            if (insErr && insErr.code !== '23505') throw insErr; // ignore unique violation (23505)
+          }
+
           const updated = await getUpdatedSlots(barberId);
           return res.status(200).json({ success: true, ...updated });
         } catch (err: any) {
           console.error("Error adding date slot:", err);
-          return res.status(500).json({ error: err.message });
+          return res.status(500).json({ error: err.message || 'Erro interno ao salvar horário' });
         }
       }
 

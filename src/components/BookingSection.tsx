@@ -112,12 +112,18 @@ const BookingSection = () => {
 
     const dateStr = format(selectedDate, 'dd/MM/yyyy');
 
-    // Horários padrão a cada 30 min das 09:00 às 19:30 (finaliza às 20:00)
-    const defaultSlots = [
+    const isoDate = format(selectedDate, 'yyyy-MM-dd');
+    const specificSlotsForDate = dateSlots.filter(s => s.selected_date === isoDate && s.barber_id === barberId);
+    
+    let baseSlots = [
       '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
       '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
       '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'
     ];
+
+    if (specificSlotsForDate.length > 0) {
+      baseSlots = specificSlotsForDate.map(s => s.time).sort();
+    }
 
     const localBookings = getBookings().filter(
       (b) => b.date === dateStr && b.status !== 'completed' && (b.barberId || 'luiz') === barberId
@@ -156,7 +162,7 @@ const BookingSection = () => {
     const isToday = selectedDate.toDateString() === now.toDateString();
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    return defaultSlots.filter((timeStr) => {
+    return baseSlots.filter((timeStr) => {
       const start = timeToMinutes(timeStr);
       const end = start + totalDuration;
 
