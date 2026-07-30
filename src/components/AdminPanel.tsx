@@ -265,14 +265,23 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                   .eq('barber_id', activeSlotsBarberId);
                   
                 if (fallbackErr) throw fallbackErr;
+                setDateSlots(prev => prev.filter(s => !(s.selected_date === dt && s.time === time && s.barber_id === activeSlotsBarberId)));
+                toast.success("Horário removido na corrida!");
+                return;
               } else {
                 throw insErr;
               }
             }
 
-            let newSlots = [...dateSlots];
-            toInsert.forEach(s => newSlots.push(s));
-            setDateSlots(newSlots);
+            setDateSlots(prev => {
+              let newSlots = [...prev];
+              toInsert.forEach(s => {
+                if (!newSlots.some(ns => ns.selected_date === s.selected_date && ns.time === s.time && ns.barber_id === s.barber_id)) {
+                  newSlots.push(s);
+                }
+              });
+              return newSlots;
+            });
             toast.success("Horário removido da grade padrão!");
           } else {
             const { error } = await supabase
