@@ -1106,7 +1106,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     { key: 'subscriptions', label: 'Planos', icon: <Gift className="w-4 h-4" /> },
     { key: 'finance', label: 'Caixa', icon: <DollarSign className="w-4 h-4" /> },
     { key: 'settings', label: 'Configurações', icon: <Settings className="w-4 h-4" /> },
-  ];
+  ].filter(t => authUser?.role === 'owner' || t.key !== 'finance');
 
   return (
     <div className="min-h-screen bg-background">
