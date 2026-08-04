@@ -70,7 +70,7 @@ export const BARBERS: Barber[] = [
     name: 'Jean (Dono)',
     role: 'owner',
     image: 'https://i.imgur.com/npARx9Q.jpeg',
-    password: '8888',
+    password: '1999',
     serviceCommissionRate: 1.0,
     planCommissionRate: 1.0
   }
