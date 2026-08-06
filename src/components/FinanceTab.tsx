@@ -140,6 +140,11 @@ function FinanceTabContent() {
 
   const handlePayRepasse = async (barberId: string) => {
     if (payingBarberId) return;
+
+    if (!window.confirm("ATENÇÃO: Você já transferiu o dinheiro para o barbeiro? Ao confirmar, o repasse acumulado será zerado.")) {
+      return;
+    }
+
     setPayingBarberId(barberId);
     try {
       // 1. Atualiza appointments
