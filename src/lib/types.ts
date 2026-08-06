@@ -116,7 +116,7 @@ export const SERVICES: Service[] = [
   { name: 'Degradê', time: 45, price: 35, image: 'https://i.imgur.com/I4t6W6N.jpeg', category: 'Cabelo' },
   { name: 'Corte Social', time: 30, price: 30, image: 'https://i.imgur.com/8eOwAxa.jpeg', category: 'Cabelo' },
   { name: 'Meia Sola', time: 20, price: 20, image: 'https://i.imgur.com/jcMfc3R.jpeg', category: 'Cabelo' },
-  { name: 'Pigmentação', time: 45, price: 30, image: 'https://i.imgur.com/9OfKc3K.jpeg', category: 'Cabelo' },
+  { name: 'Pigmentação', time: 20, price: 30, image: 'https://i.imgur.com/9OfKc3K.jpeg', category: 'Cabelo' },
   { name: 'Luzes', time: 210, price: 140, image: 'https://i.imgur.com/UwogcoN.jpeg', category: 'Cabelo' },
 
   // Barba

@@ -746,7 +746,7 @@ const BookingSection = () => {
 
               <div className="space-y-3 mb-8">
                 {SERVICES.filter(s => 
-                  ['Barba', 'Sobrancelha', 'Limpeza Nasal'].includes(s.name) && 
+                  ['Barba', 'Sobrancelha', 'Limpeza Nasal', 'Pigmentação'].includes(s.name) && 
                   s.name !== selectedService.name
                 ).map(addon => {
                   const isSelected = bumpSelections.some(b => b.name === addon.name);
