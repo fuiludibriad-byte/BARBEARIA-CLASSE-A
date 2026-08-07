@@ -1011,9 +1011,17 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
   };
 
   const handleSelectService = (name: string) => {
-    setManualService(name);
+    const addons = SERVICES.filter(s => ['Barba', 'Sobrancelha', 'Limpeza Nasal', 'Pigmentação'].includes(s.name));
+    const currentAddons = addons.filter(a => manualService.includes(a.name));
+    
+    const newName = currentAddons.length > 0 ? `${name} + ${currentAddons.map(a => a.name).join(' + ')}` : name;
+    setManualService(newName);
+    
     const svc = SERVICES.find(s => s.name === name);
-    if (svc) setManualPrice(String(svc.price));
+    if (svc) {
+      const addonsPrice = currentAddons.reduce((acc, curr) => acc + curr.price, 0);
+      setManualPrice(String(svc.price + addonsPrice));
+    }
   };
 
   const filteredCompleted = useMemo(() => {
@@ -1606,14 +1614,14 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                 {addMode === 'booking' ? (
                   <div className="space-y-5 animate-in fade-in duration-200">
                     <div>
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3 block">Serviço Rápido</label>
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3 block">Serviço Principal</label>
                       <div className="grid grid-cols-2 gap-2">
-                        {SERVICES.map(s => (
+                        {SERVICES.filter(s => !['Barba', 'Sobrancelha', 'Limpeza Nasal', 'Pigmentação'].includes(s.name)).map(s => (
                           <button
                             key={s.name}
                             onClick={() => handleSelectService(s.name)}
                             className={`p-3 rounded-xl text-xs font-medium transition-all border text-left ${
-                              manualService === s.name
+                              manualService.includes(s.name)
                                 ? 'bg-primary/10 border-primary/30 text-primary'
                                 : 'bg-background/50 border-primary/5 text-muted-foreground hover:border-primary/20 hover:text-foreground'
                             }`}
@@ -1622,6 +1630,48 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                             <span className="font-mono text-[10px] opacity-70">R$ {s.price}</span>
                           </button>
                         ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3 block">Adicionais (Opcional)</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {SERVICES.filter(s => ['Barba', 'Sobrancelha', 'Limpeza Nasal', 'Pigmentação'].includes(s.name)).map(addon => {
+                          const isSelected = manualService.includes(addon.name);
+                          return (
+                            <button
+                              key={addon.name}
+                              onClick={() => {
+                                setManualService(prev => {
+                                  if (isSelected) {
+                                    return prev.replace(` + ${addon.name}`, '').replace(`${addon.name} + `, '').replace(addon.name, '').trim();
+                                  } else {
+                                    return prev ? `${prev} + ${addon.name}` : addon.name;
+                                  }
+                                });
+                                setManualPrice(prev => {
+                                  const current = Number(prev) || 0;
+                                  return isSelected 
+                                    ? Math.max(0, current - addon.price).toString() 
+                                    : (current + addon.price).toString();
+                                });
+                              }}
+                              className={`p-3 rounded-xl text-xs font-medium transition-all border flex items-center justify-between ${
+                                isSelected
+                                  ? 'bg-primary/10 border-primary/30 text-primary'
+                                  : 'bg-background/50 border-primary/5 text-muted-foreground hover:border-primary/20 hover:text-foreground'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className={`w-4 h-4 rounded-sm flex items-center justify-center border ${isSelected ? 'bg-primary border-primary' : 'border-muted-foreground bg-transparent'}`}>
+                                  {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                                </div>
+                                <span className="block">{addon.name}</span>
+                              </div>
+                              <span className="font-mono text-[10px] opacity-70">+R${addon.price}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
