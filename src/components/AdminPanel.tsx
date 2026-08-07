@@ -907,8 +907,10 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
       console.error('Local store error:', e);
     }
     
-    const svc = SERVICES.find(s => s.name === manualService);
-    const duration = svc ? svc.time : 180;
+    const matchingServices = SERVICES.filter(s => manualService.includes(s.name));
+    const duration = matchingServices.length > 0 
+      ? matchingServices.reduce((acc, curr) => acc + curr.time, 0)
+      : 180;
 
     // Função de limpeza do formulário - chamada independente do resultado da API
     const finalize = (isPastSnap: boolean) => {
