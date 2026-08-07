@@ -71,6 +71,9 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
   const [manualDate, setManualDate] = useState('');
   const [manualTime, setManualTime] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [isAddingManual, setIsAddingManual] = useState(false);
+  const [isAddingBlock, setIsAddingBlock] = useState(false);
+  const [manualError, setManualError] = useState('');
 
   // Schedule block state
   const [addMode, setAddMode] = useState<'booking' | 'block'>('booking');
@@ -855,66 +858,77 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
       });
   };
 
-  // Manual add → goes to BOOKINGS (agendados), not completed
+  const manualIsPast = useMemo(() => {
+    if (!manualDate || manualDate.length < 10) return false;
+    try {
+      const parts = manualDate.split('/');
+      if (parts.length < 3) return false;
+      const [d, m, y] = parts.map(Number);
+      if (isNaN(d) || isNaN(m) || isNaN(y)) return false;
+      const bookingDate = new Date(y, m - 1, d);
+      const today = new Date(); 
+      today.setHours(0, 0, 0, 0);
+      return bookingDate < today;
+    } catch { return false; }
+  }, [manualDate]);
+
   const handleAddManualService = () => {
-    if (!manualService || !manualPrice || !manualName || !manualDate || !manualTime) return;
-
-    if (manualDate.length < 10) {
-      alert("Por favor, digite a data completa no formato DD/MM/AAAA");
-      return;
-    }
-
+    setManualError('');
+    if (!manualService.trim()) { setManualError('Selecione ou digite o nome do serviço.'); return; }
+    if (!manualPrice) { setManualError('Informe o valor do serviço.'); return; }
+    if (!manualName.trim()) { setManualError('Informe o nome da cliente.'); return; }
+    if (!manualDate || manualDate.length < 10) { setManualError('Informe a data completa no formato DD/MM/AAAA.'); return; }
+    if (!manualTime) { setManualError('Informe o horário do agendamento.'); return; }
+    
+    setIsAddingManual(true);
+    
     const finalBarberId = authUser.role === 'owner' ? manualBarberId : authUser.id;
     const booking: Booking = {
-      id: crypto.randomUUID(),
-      service: manualService,
-      price: Number(manualPrice),
+      id: generateUUID(),
+      service: manualService.trim(),
+      price: Number(manualPrice) || 0,
       date: manualDate,
       time: manualTime,
-      name: manualName,
+      name: manualName.trim(),
       phone: manualPhone.replace(/\D/g, ''),
-      status: 'accepted',
+      status: manualIsPast ? 'completed' : 'accepted',
       barberId: finalBarberId,
     };
 
-    // Immediate local feedback
-    addBooking(booking);
+    try {
+      if (manualIsPast) {
+        addCompleted(booking);
+        setCompleted(prev => [...prev, { ...booking, status: 'completed' }]);
+      } else {
+        addBooking(booking);
+        setBookings(prev => [...prev, booking]);
+      }
+    } catch (e) {
+      console.error('Local store error:', e);
+    }
     
-    // Find service duration
     const svc = SERVICES.find(s => s.name === manualService);
     const duration = svc ? svc.time : 180;
 
-    // Sync manual booking to Google Calendar via Serverless API
     fetch('/api/calendar', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        type: 'booking',
-        booking,
-        duration,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'booking', booking, duration }),
     })
-      .then((res) => {
-        if (!res.ok) throw new Error('Falha ao adicionar agendamento manual');
-        console.log("Manual booking synced to Google Calendar");
-        reload();
-      })
-      .catch((err) => {
-        console.error("Error syncing manual booking to Google Calendar:", err);
+      .catch(e => console.error('Calendar sync error:', e))
+      .finally(() => {
+        setIsAddingManual(false);
+        setManualService('');
+        setManualPrice('');
+        setManualName('');
+        setManualPhone('');
+        setManualDate('');
+        setManualTime('');
+        setManualError('');
+        setShowSuccess(true);
+        setTab(manualIsPast ? 'dashboard' : 'bookings');
+        setTimeout(() => setShowSuccess(false), 3000);
       });
-
-    reload();
-    setManualService('');
-    setManualPrice('');
-    setManualName('');
-    setManualPhone('');
-    setManualDate('');
-    setManualTime('');
-    setShowSuccess(true);
-    setTab('bookings');
-    setTimeout(() => setShowSuccess(false), 2500);
   };
 
   const handleSaveBlock = () => {
@@ -1632,6 +1646,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                       <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2 block">Data (DD/MM/AAAA)</label>
                       <input
                         type="text"
+                        inputMode="numeric"
                         value={manualDate}
                         onChange={e => {
                           let v = e.target.value.replace(/\D/g, '').slice(0, 8);
@@ -1639,17 +1654,41 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                           else if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2);
                           setManualDate(v);
                         }}
-                        placeholder="06/04/2026"
-                        className="w-full bg-background/50 border border-primary/10 focus:border-primary/40 p-3.5 rounded-xl outline-none transition-all text-foreground text-sm placeholder:text-muted-foreground/40"
+                        placeholder="07/08/2026"
+                        maxLength={10}
+                        className={`w-full bg-background/50 border p-3.5 rounded-xl outline-none transition-all text-foreground text-sm placeholder:text-muted-foreground/40 ${manualDate.length === 10 ? (manualIsPast ? 'border-emerald-500/40 focus:border-emerald-500/60' : 'border-primary/30 focus:border-primary/50') : 'border-primary/10 focus:border-primary/40'}`}
                       />
+                      
+                      {manualDate.length === 10 && (
+                        <div className={`mt-2 flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-lg ${manualIsPast ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-primary/10 text-primary border border-primary/20'}`}>
+                          {manualIsPast ? (
+                            <>Data no passado — será lançado direto no Faturamento do Dashboard ✅</>
+                          ) : (
+                            <>Data futura — será adicionado à lista de Agendamentos</>
+                          )}
+                        </div>
+                      )}
                     </div>
 
+                    {manualError && (
+                      <div className="p-3 bg-destructive/10 text-destructive text-sm font-medium rounded-xl border border-destructive/20">
+                        ⚠️ {manualError}
+                      </div>
+                    )}
+
                     <button
+                      type="button"
                       onClick={handleAddManualService}
-                      disabled={!manualService || !manualPrice || !manualName || !manualDate || !manualTime}
-                      className="w-full py-4 bg-primary text-primary-foreground font-bold rounded-xl transition-all hover:shadow-[0_0_25px_-5px_hsl(6_48%_68%/0.5)] hover:scale-[1.02] active:scale-[0.98] disabled:opacity-30 disabled:hover:shadow-none disabled:hover:scale-100 flex items-center justify-center gap-2"
+                      disabled={isAddingManual}
+                      className={`w-full py-4 font-bold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${manualIsPast ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_25px_-5px_hsl(142_71%_45%/0.5)]' : 'bg-primary text-primary-foreground hover:shadow-[0_0_25px_-5px_hsl(6_48%_68%/0.5)]'}`}
                     >
-                      <Plus className="w-5 h-5" /> Adicionar aos Agendamentos
+                      {isAddingManual ? (
+                        <><Loader2 className="w-5 h-5 animate-spin" /> Salvando...</>
+                      ) : manualIsPast ? (
+                        <><DollarSign className="w-5 h-5" /> Registrar no Faturamento</>
+                      ) : (
+                        <><Plus className="w-5 h-5" /> Adicionar aos Agendamentos</>
+                      )}
                     </button>
                   </div>
                 ) : (
