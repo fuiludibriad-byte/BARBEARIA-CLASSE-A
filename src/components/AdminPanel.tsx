@@ -910,25 +910,34 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     const svc = SERVICES.find(s => s.name === manualService);
     const duration = svc ? svc.time : 180;
 
-    fetch('/api/calendar', {
+    // Função de limpeza do formulário - chamada independente do resultado da API
+    const finalize = (isPastSnap: boolean) => {
+      setIsAddingManual(false);
+      setManualService('');
+      setManualPrice('');
+      setManualName('');
+      setManualPhone('');
+      setManualDate('');
+      setManualTime('');
+      setManualError('');
+      setShowSuccess(true);
+      setTab(isPastSnap ? 'dashboard' : 'bookings');
+      setTimeout(() => setShowSuccess(false), 3000);
+    };
+
+    const isPastSnap = manualIsPast;
+
+    // Timeout de 6 segundos - se a API do calendário travar, o formulário SEMPRE é limpo
+    const timeoutPromise = new Promise<void>(resolve => setTimeout(resolve, 6000));
+    const calendarPromise = fetch('/api/calendar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'booking', booking, duration }),
-    })
-      .catch(e => console.error('Calendar sync error:', e))
-      .finally(() => {
-        setIsAddingManual(false);
-        setManualService('');
-        setManualPrice('');
-        setManualName('');
-        setManualPhone('');
-        setManualDate('');
-        setManualTime('');
-        setManualError('');
-        setShowSuccess(true);
-        setTab(manualIsPast ? 'dashboard' : 'bookings');
-        setTimeout(() => setShowSuccess(false), 3000);
-      });
+    }).then(() => {}).catch(e => console.error('Calendar sync error:', e));
+
+    Promise.race([calendarPromise, timeoutPromise]).finally(() => {
+      finalize(isPastSnap);
+    });
   };
 
   const handleSaveBlock = () => {
