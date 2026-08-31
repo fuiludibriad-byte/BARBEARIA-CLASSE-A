@@ -33,61 +33,41 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { email_pessoal, nome_do_estudio } = req.body;
+    const { email_pessoal, nome_do_estudio, email_luiz, email_vitinho } = req.body;
 
-    if (!email_pessoal || !nome_do_estudio) {
-      return res.status(400).json({ error: 'Campos email_pessoal e nome_do_estudio são obrigatórios.' });
+    if (!email_pessoal || !nome_do_estudio || !email_luiz || !email_vitinho) {
+      return res.status(400).json({ error: 'Todos os e-mails são obrigatórios.' });
     }
 
-    console.log(`Iniciando auto-provisionamento de agenda para o estúdio: "${nome_do_estudio}" (${email_pessoal})`);
+    console.log(`Provisionando agendas duplas para: "${nome_do_estudio}"`);
 
-    // 1. Criar a nova agenda secundária via Conta de Serviço
-    const calendarResponse = await calendar.calendars.insert({
-      requestBody: {
-        summary: `Zynk - ${nome_do_estudio}`,
-        timeZone: 'America/Sao_Paulo',
-      },
+    // 1. Criar agenda do Luiz
+    const calLuiz = await calendar.calendars.insert({
+      requestBody: { summary: `${nome_do_estudio} - Luiz`, timeZone: 'America/Sao_Paulo' },
     });
+    const idLuiz = calLuiz.data.id;
 
-    const googleCalendarId = calendarResponse.data.id;
-    if (!googleCalendarId) {
-      throw new Error('Não foi possível obter o ID da agenda criada no Google.');
-    }
-
-    console.log(`Agenda criada com sucesso. ID: ${googleCalendarId}`);
-
-    // 2. Conceder permissão de proprietária (owner) para o Gmail pessoal da dona do estúdio via ACL
-    await calendar.acl.insert({
-      calendarId: googleCalendarId,
-      requestBody: {
-        role: 'owner',
-        scope: {
-          type: 'user',
-          value: email_pessoal,
-        },
-      },
+    // 2. Criar agenda do Vitinho
+    const calVit = await calendar.calendars.insert({
+      requestBody: { summary: `${nome_do_estudio} - Vitinho`, timeZone: 'America/Sao_Paulo' },
     });
+    const idVit = calVit.data.id;
 
-    console.log(`Acesso ACL de Proprietário concedido a: ${email_pessoal}`);
+    // 3. Permissões Luiz
+    await calendar.acl.insert({ calendarId: idLuiz, requestBody: { role: 'owner', scope: { type: 'user', value: email_pessoal } } });
+    await calendar.acl.insert({ calendarId: idLuiz, requestBody: { role: 'writer', scope: { type: 'user', value: email_luiz } } });
 
-    // 3. Gravar o novo google_calendar_id no Supabase na tabela de configurações
-    const { error: dbError } = await supabase
-      .from('studio_config')
-      .upsert(
-        {
-          nome_do_estudio,
-          email_pessoal,
-          google_calendar_id: googleCalendarId,
-        },
-        { onConflict: 'email_pessoal' }
-      );
+    // 4. Permissões Vitinho
+    await calendar.acl.insert({ calendarId: idVit, requestBody: { role: 'owner', scope: { type: 'user', value: email_pessoal } } });
+    await calendar.acl.insert({ calendarId: idVit, requestBody: { role: 'writer', scope: { type: 'user', value: email_vitinho } } });
 
-    if (dbError) {
-      throw dbError;
-    }
-
-    console.log(`Agenda vinculada e persistida no Supabase com sucesso.`);
-
+    // 5. Salvar no Supabase
+    await supabase.from('studio_config').insert([
+      { nome_do_estudio, email_pessoal, google_calendar_id: idLuiz, barber_id: 'luiz' },
+      { nome_do_estudio, email_pessoal, google_calendar_id: idVit, barber_id: 'vitinho' }
+    ]);
+    
+    console.log(`Agendas isoladas criadas com sucesso.`);
     return res.status(201).json({
       success: true,
       message: 'Agenda criada e compartilhada com sucesso!',

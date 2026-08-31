@@ -22,14 +22,15 @@ const auth = new google.auth.GoogleAuth({
 const calendar = google.calendar({ version: 'v3', auth });
 
 // Função para buscar o ID da agenda dinâmica do estúdio no Supabase
-async function getDynamicCalendarId(): Promise<string> {
-  if (!isDbConfigured) {
+async function getDynamicCalendarId(barberId: string): Promise<string> {
+  if (!isDbConfigured || !barberId) {
     return 'guilhermesuzena10@gmail.com';
   }
   try {
     const { data, error } = await supabase
       .from('studio_config')
       .select('google_calendar_id')
+      .eq('barber_id', barberId)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -121,9 +122,6 @@ export default async function handler(req: any, res: any) {
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-
-  // Resolve dynamic calendarId from database
-  const activeCalendarId = await getDynamicCalendarId();
 
   try {
     // ----------------------------------------------------
@@ -498,6 +496,7 @@ export default async function handler(req: any, res: any) {
       if (type === 'booking') {
         const id = booking.id;
         const eventId = id.replace(/-/g, '').toLowerCase();
+        const activeCalendarId = await getDynamicCalendarId(block.barberId || 'luiz');
 
         const [d, m, y] = booking.date.split('/');
         const isoDate = `${y}-${m}-${d}`;
@@ -688,6 +687,7 @@ export default async function handler(req: any, res: any) {
         }
 
         // 2. Criar evento no Google Calendar para espelhamento
+        const activeCalendarId = await getDynamicCalendarId(booking.barberId || 'luiz');
         const title = `${booking.service} - ${booking.name}`;
         const barberName = booking.barberId === 'vitinho' ? 'Vitinho' : 'Luiz';
         const planoText = finalIsPlanUsage ? '\n[Pago via Assinatura]' : '';
@@ -767,6 +767,7 @@ export default async function handler(req: any, res: any) {
         }
 
         // 2. Criar no Google Calendar
+        const activeCalendarId = await getDynamicCalendarId(block.barberId || 'luiz');
         const title = `Bloqueio - ${block.reason || 'Indisponível'}`;
         let start: any;
         let end: any;
@@ -980,10 +981,13 @@ export default async function handler(req: any, res: any) {
       const eventId = id.replace(/-/g, '').toLowerCase();
 
       // 1. Excluir do Supabase
-      const { error: deleteErr } = await supabase
+      const { data: delData, error: deleteErr } = await supabase
         .from('appointments')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .select();
+      const barberId = (delData && delData[0] && delData[0].barber_id) ? delData[0].barber_id : 'luiz';
+      const activeCalendarId = await getDynamicCalendarId(barberId);
 
       if (deleteErr) throw deleteErr;
 

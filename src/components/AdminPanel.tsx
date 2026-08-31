@@ -483,6 +483,8 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
       body: JSON.stringify({
         email_pessoal: ownerEmail,
         nome_do_estudio: studioName,
+        email_luiz: luizEmail,
+        email_vitinho: vitinhoEmail,
       }),
     })
       .then(async (res) => {
