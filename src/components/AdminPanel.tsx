@@ -30,12 +30,15 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     return { id: 'dono', name: 'Administrador', role: 'owner' };
   }, []);
 
-  const [selectedBarberTabId, setSelectedBarberTabId] = useState<string>('luiz');
+  const [selectedBarberTabId, setSelectedBarberTabId] = useState<string>('all');
   const [dashboardBarberFilter, setDashboardBarberFilter] = useState<string>('all');
   const [manualBarberId, setManualBarberId] = useState<string>('luiz');
 
   const activeSlotsBarberId = useMemo(() => {
-    return authUser.role === 'owner' ? selectedBarberTabId : authUser.id;
+    if (authUser.role === 'owner') {
+      return selectedBarberTabId === 'all' ? 'luiz' : selectedBarberTabId;
+    }
+    return authUser.id;
   }, [authUser, selectedBarberTabId]);
   const [tab, setTab] = useState<TabType>('bookings');
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -70,13 +73,32 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
   const [manualPhone, setManualPhone] = useState('');
   const [manualDate, setManualDate] = useState('');
   const [manualTime, setManualTime] = useState('');
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [manualError, setManualError] = useState('');
   const [isAddingManual, setIsAddingManual] = useState(false);
   const [isAddingBlock, setIsAddingBlock] = useState(false);
-  const [manualError, setManualError] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [addMode, setAddMode] = useState<'booking' | 'block'>('booking');
+
+  const [clients, setClients] = useState<{name: string, phone: string}[]>([]);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const { data: subs } = await supabase.from('subscriptions').select('client_name, client_phone');
+        const { data: apps } = await supabase.from('appointments').select('name, phone');
+        const clientMap = new Map<string, string>();
+        if (subs) subs.forEach(s => { if (s.client_name) clientMap.set(s.client_name.trim(), s.client_phone || ''); });
+        if (apps) apps.forEach(a => { if (a.name) clientMap.set(a.name.trim(), a.phone || ''); });
+        setClients(Array.from(clientMap.entries()).map(([name, phone]) => ({ name, phone })));
+      } catch (err) {
+        console.error('Erro ao buscar clientes', err);
+      }
+    };
+    fetchClients();
+  }, []);
 
   // Schedule block state
-  const [addMode, setAddMode] = useState<'booking' | 'block'>('booking');
   const [blockDate, setBlockDate] = useState('');
   const [blockAllDay, setBlockAllDay] = useState(false);
   const [blockStart, setBlockStart] = useState('');
@@ -482,19 +504,28 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
   };
 
   const displayBookings = useMemo(() => {
-    if (authUser.role === 'owner') return bookings;
+    if (authUser.role === 'owner') {
+      if (selectedBarberTabId === 'all') return bookings;
+      return bookings.filter(b => (b.barberId || 'luiz') === selectedBarberTabId);
+    }
     return bookings.filter(b => (b.barberId || 'luiz') === authUser.id);
-  }, [bookings, authUser]);
+  }, [bookings, authUser, selectedBarberTabId]);
 
   const displayCompleted = useMemo(() => {
-    if (authUser.role === 'owner') return completed;
+    if (authUser.role === 'owner') {
+      if (selectedBarberTabId === 'all') return completed;
+      return completed.filter(b => (b.barberId || 'luiz') === selectedBarberTabId);
+    }
     return completed.filter(b => (b.barberId || 'luiz') === authUser.id);
-  }, [completed, authUser]);
+  }, [completed, authUser, selectedBarberTabId]);
 
   const displayBlocks = useMemo(() => {
-    if (authUser.role === 'owner') return blocks;
+    if (authUser.role === 'owner') {
+      if (selectedBarberTabId === 'all') return blocks;
+      return blocks.filter(b => (b.barberId || 'luiz') === selectedBarberTabId);
+    }
     return blocks.filter(b => (b.barberId || 'luiz') === authUser.id);
-  }, [blocks, authUser]);
+  }, [blocks, authUser, selectedBarberTabId]);
 
   const completedForDashboard = useMemo(() => {
     if (authUser.role !== 'owner') {
@@ -1013,7 +1044,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
   };
 
   const handleSelectService = (name: string) => {
-    const addons = SERVICES.filter(s => ['Barba', 'Sobrancelha', 'Limpeza Nasal', 'Pigmentação'].includes(s.name));
+    const addons = SERVICES.filter(s => ['Barba', 'Pigmentação', 'Sobrancelha', 'Limpeza Nasal', 'Meia Sola', 'Limpeza de Pele', 'Luzes'].includes(s.name));
     const currentAddons = addons.filter(a => manualService.includes(a.name));
     
     const newName = currentAddons.length > 0 ? `${name} + ${currentAddons.map(a => a.name).join(' + ')}` : name;
@@ -1618,7 +1649,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                     <div>
                       <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3 block">Serviço Principal</label>
                       <div className="grid grid-cols-2 gap-2">
-                        {SERVICES.filter(s => !['Barba', 'Sobrancelha', 'Limpeza Nasal', 'Pigmentação'].includes(s.name)).map(s => (
+                        {SERVICES.filter(s => !['Barba', 'Pigmentação', 'Sobrancelha', 'Limpeza Nasal', 'Meia Sola', 'Limpeza de Pele', 'Luzes'].includes(s.name)).map(s => (
                           <button
                             key={s.name}
                             onClick={() => handleSelectService(s.name)}
@@ -1638,7 +1669,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                     <div>
                       <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-3 block">Adicionais (Opcional)</label>
                       <div className="grid grid-cols-2 gap-2">
-                        {SERVICES.filter(s => ['Barba', 'Sobrancelha', 'Limpeza Nasal', 'Pigmentação'].includes(s.name)).map(addon => {
+                        {SERVICES.filter(s => ['Barba', 'Pigmentação', 'Sobrancelha', 'Limpeza Nasal', 'Meia Sola', 'Limpeza de Pele', 'Luzes'].includes(s.name)).map(addon => {
                           const isSelected = manualService.includes(addon.name);
                           return (
                             <button
@@ -1693,9 +1724,39 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                       </div>
                     </div>
 
-                    <div>
+                    <div className="relative">
                       <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2 block">Nome do cliente</label>
-                      <input type="text" value={manualName} onChange={e => setManualName(e.target.value)} placeholder="Nome do cliente" className="w-full bg-background/50 border border-primary/10 focus:border-primary/40 p-3.5 rounded-xl outline-none transition-all text-foreground text-sm placeholder:text-muted-foreground/40" />
+                      <input 
+                        type="text" 
+                        value={manualName} 
+                        onChange={e => {
+                          setManualName(e.target.value);
+                          setShowClientSuggestions(true);
+                        }} 
+                        onFocus={() => setShowClientSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
+                        placeholder="Nome do cliente" 
+                        className="w-full bg-background/50 border border-primary/10 focus:border-primary/40 p-3.5 rounded-xl outline-none transition-all text-foreground text-sm placeholder:text-muted-foreground/40" 
+                      />
+                      {showClientSuggestions && manualName && (
+                        <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                          {clients.filter(c => c.name.toLowerCase().includes(manualName.toLowerCase())).map((c, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              className="w-full text-left px-4 py-3 hover:bg-secondary transition-colors text-sm border-b border-border last:border-0"
+                              onClick={() => {
+                                setManualName(c.name);
+                                setManualPhone(c.phone);
+                                setShowClientSuggestions(false);
+                              }}
+                            >
+                              <div className="font-medium text-foreground">{c.name}</div>
+                              <div className="text-xs text-muted-foreground">{c.phone}</div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -1704,7 +1765,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                     </div>
 
                     <div>
-                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2 block">Data (DD/MM/AAAA)</label>
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2 block">Data do Agendamento (DD/MM/AAAA)</label>
                       <input
                         type="text"
                         inputMode="numeric"
@@ -1877,6 +1938,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                       onChange={(e) => setSelectedBarberTabId(e.target.value)}
                       className="bg-background border border-primary/20 rounded-lg p-2 text-sm font-semibold outline-none focus:border-primary text-foreground"
                     >
+                      <option value="all">Todos os Profissionais</option>
                       <option value="luiz">Luiz</option>
                       <option value="vitinho">Vitinho</option>
                     </select>
@@ -2311,7 +2373,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
 
           {tab === 'finance' && <FinanceTab />}
           
-          {tab === 'subscriptions' && <SubscriptionsTab />}
+          {tab === 'subscriptions' && <SubscriptionsTab authUser={authUser} />}
         </div>
       </div>
     </div>

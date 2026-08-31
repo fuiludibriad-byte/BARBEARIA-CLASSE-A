@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { BARBERS, PLAN_OPTIONS, Subscription } from '@/lib/types';
-import { Gift, CheckCircle, Loader2, Search, Trash2, Minus, CalendarX2, UserCheck } from 'lucide-react';
+import { Gift, CheckCircle, Loader2, Search, Trash2, Minus, CalendarX2, UserCheck, Undo2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import React from 'react';
@@ -34,13 +34,13 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   }
 }
 
-function SubscriptionsTabContent() {
+function SubscriptionsTabContent({ authUser }: { authUser: any }) {
   const [nome, setNome] = useState('');
   const [telefone, setTelefone] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState<string>(PLAN_OPTIONS[0].id);
   const [customPrice, setCustomPrice] = useState<number>(0);
   const [customServices, setCustomServices] = useState<number>(1);
-  const [soldBy, setSoldBy] = useState<string>(BARBERS[0].id);
+  const [soldBy, setSoldBy] = useState<string>(authUser?.id || BARBERS[0].id);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -53,6 +53,9 @@ function SubscriptionsTabContent() {
 
   const selectedPlan = PLAN_OPTIONS.find(p => p.id === selectedPlanId);
   const isCustom = selectedPlanId === 'plan-custom';
+
+  const [clients, setClients] = useState<{name: string, phone: string}[]>([]);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
 
   const fetchSubscriptions = async () => {
     setLoadingSubs(true);
@@ -75,6 +78,32 @@ function SubscriptionsTabContent() {
 
   useEffect(() => {
     fetchSubscriptions();
+    
+    const fetchClients = async () => {
+      try {
+        const { data: subs } = await supabase.from('subscriptions').select('client_name, client_phone');
+        const { data: apps } = await supabase.from('appointments').select('name, phone');
+        
+        const clientMap = new Map<string, string>();
+        
+        if (subs) {
+          subs.forEach(s => {
+            if (s.client_name) clientMap.set(s.client_name.trim(), s.client_phone || '');
+          });
+        }
+        if (apps) {
+          apps.forEach(a => {
+            if (a.name) clientMap.set(a.name.trim(), a.phone || '');
+          });
+        }
+        
+        const uniqueClients = Array.from(clientMap.entries()).map(([name, phone]) => ({ name, phone }));
+        setClients(uniqueClients);
+      } catch (err) {
+        console.error('Erro ao buscar clientes', err);
+      }
+    };
+    fetchClients();
   }, []);
 
   const handleSell = async (e?: React.FormEvent) => {
@@ -175,6 +204,43 @@ function SubscriptionsTabContent() {
     }
   };
 
+  const handleUndoDeduct = async (id: string) => {
+    setProcessingId(id + '-undo');
+    try {
+      const sub = subscriptions.find(s => s.id === id);
+      if (!sub) return;
+
+      const planName = sub.plan_type || '';
+      const itensPorSessao = planName.includes('+') ? planName.split('+').length : 1;
+      const baixaReal = Math.min(itensPorSessao, sub.used_cuts || 0);
+
+      if (baixaReal <= 0) {
+        toast.error("Nenhum serviço utilizado para desfazer.");
+        return;
+      }
+
+      const newUsedCuts = (sub.used_cuts || 0) - baixaReal;
+      
+      const { error } = await supabase
+        .from('subscriptions')
+        .update({ 
+          used_cuts: newUsedCuts, 
+          status: 'active'
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success(`Desfeito com sucesso: ${baixaReal} item(ns) restaurado(s).`);
+      await fetchSubscriptions();
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Erro ao desfazer baixa: ' + (err?.message || 'Desconhecido'));
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const handleHardDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (!window.confirm('Tem certeza que deseja excluir este plano? Esta ação é irreversível e o valor será removido do faturamento do caixa.')) return;
@@ -200,6 +266,7 @@ function SubscriptionsTabContent() {
   };
 
   const filteredSubscriptions = (subscriptions || []).filter(s => {
+    if (authUser?.role !== 'owner' && s.barber_id !== authUser?.id) return false;
     if (filterStatus !== 'all' && s.status !== filterStatus) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -230,15 +297,39 @@ function SubscriptionsTabContent() {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
+            <div className="relative">
               <label className="block text-xs uppercase tracking-widest text-muted-foreground mb-2">Nome do Cliente</label>
               <input 
                 type="text" 
                 value={nome}
-                onChange={e => setNome(e.target.value)}
+                onChange={e => {
+                  setNome(e.target.value);
+                  setShowClientSuggestions(true);
+                }}
+                onFocus={() => setShowClientSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
                 className="w-full bg-secondary border border-border rounded-xl p-4 outline-none text-foreground"
                 placeholder="Ex: João Silva"
               />
+              {showClientSuggestions && nome && (
+                <div className="absolute z-10 w-full mt-1 bg-card border border-border rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                  {clients.filter(c => c.name.toLowerCase().includes(nome.toLowerCase())).map((c, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className="w-full text-left px-4 py-3 hover:bg-secondary transition-colors text-sm border-b border-border last:border-0"
+                      onClick={() => {
+                        setNome(c.name);
+                        setTelefone(c.phone);
+                        setShowClientSuggestions(false);
+                      }}
+                    >
+                      <div className="font-medium text-foreground">{c.name}</div>
+                      <div className="text-xs text-muted-foreground">{c.phone}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-xs uppercase tracking-widest text-muted-foreground mb-2">Telefone (WhatsApp)</label>
@@ -427,6 +518,14 @@ function SubscriptionsTabContent() {
                               )}
                             </button>
                             <button 
+                              onClick={() => handleUndoDeduct(sub.id)}
+                              disabled={(sub.used_cuts || 0) <= 0 || processingId === sub.id + '-undo'}
+                              className="px-4 bg-secondary text-foreground font-bold py-2.5 rounded-xl text-sm hover:bg-secondary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Desfazer Baixa"
+                            >
+                              {processingId === sub.id + '-undo' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}
+                            </button>
+                            <button 
                               onClick={(e) => handleHardDelete(e, sub.id)}
                               disabled={processingId === sub.id}
                               className="px-4 bg-destructive/10 text-destructive font-bold py-2.5 rounded-xl text-sm hover:bg-destructive hover:text-destructive-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -449,10 +548,10 @@ function SubscriptionsTabContent() {
   );
 }
 
-export default function SubscriptionsTab() {
+export default function SubscriptionsTab({ authUser }: { authUser: any }) {
   return (
     <ErrorBoundary>
-      <SubscriptionsTabContent />
+      <SubscriptionsTabContent authUser={authUser} />
     </ErrorBoundary>
   );
 }
