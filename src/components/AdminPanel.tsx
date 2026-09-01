@@ -109,6 +109,8 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
   // Calendar Provisioning State
   const [studioName, setStudioName] = useState('Barbearia Classe A');
   const [ownerEmail, setOwnerEmail] = useState('');
+  const [luizEmail, setLuizEmail] = useState('');
+  const [vitinhoEmail, setVitinhoEmail] = useState('');
   const [isProvisioning, setIsProvisioning] = useState(false);
 
   // Slots Whitelist editor state
@@ -2233,12 +2235,32 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2 block">E-mail Pessoal (Gmail)</label>
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2 block">E-mail do Dono (Gmail)</label>
                     <input
                       type="email"
                       value={ownerEmail}
                       onChange={e => setOwnerEmail(e.target.value)}
-                      placeholder="dona@gmail.com"
+                      placeholder="dono@gmail.com"
+                      className="w-full bg-background/50 border border-primary/10 focus:border-primary/40 p-3.5 rounded-xl outline-none transition-all text-foreground text-sm placeholder:text-muted-foreground/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2 block">E-mail do Luiz (Gmail)</label>
+                    <input
+                      type="email"
+                      value={luizEmail}
+                      onChange={e => setLuizEmail(e.target.value)}
+                      placeholder="luiz@gmail.com"
+                      className="w-full bg-background/50 border border-primary/10 focus:border-primary/40 p-3.5 rounded-xl outline-none transition-all text-foreground text-sm placeholder:text-muted-foreground/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-2 block">E-mail do Vitinho (Gmail)</label>
+                    <input
+                      type="email"
+                      value={vitinhoEmail}
+                      onChange={e => setVitinhoEmail(e.target.value)}
+                      placeholder="vitinho@gmail.com"
                       className="w-full bg-background/50 border border-primary/10 focus:border-primary/40 p-3.5 rounded-xl outline-none transition-all text-foreground text-sm placeholder:text-muted-foreground/40"
                     />
                   </div>
