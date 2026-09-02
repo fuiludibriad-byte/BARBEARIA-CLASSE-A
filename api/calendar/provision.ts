@@ -41,25 +41,22 @@ export default async function handler(req: any, res: any) {
 
     console.log(`Provisionando agendas duplas para: "${nome_do_estudio}"`);
 
-    // 1. Criar agenda do Luiz
-    const calLuiz = await calendar.calendars.insert({
-      requestBody: { summary: `${nome_do_estudio} - Luiz`, timeZone: 'America/Sao_Paulo' },
-    });
+    // 1. Criar agendas simultaneamente
+    const [calLuiz, calVit] = await Promise.all([
+      calendar.calendars.insert({ requestBody: { summary: `${nome_do_estudio} - Luiz`, timeZone: 'America/Sao_Paulo' } }),
+      calendar.calendars.insert({ requestBody: { summary: `${nome_do_estudio} - Vitinho`, timeZone: 'America/Sao_Paulo' } })
+    ]);
+    
     const idLuiz = calLuiz.data.id;
-
-    // 2. Criar agenda do Vitinho
-    const calVit = await calendar.calendars.insert({
-      requestBody: { summary: `${nome_do_estudio} - Vitinho`, timeZone: 'America/Sao_Paulo' },
-    });
     const idVit = calVit.data.id;
 
-    // 3. Permissões Luiz
-    await calendar.acl.insert({ calendarId: idLuiz, requestBody: { role: 'owner', scope: { type: 'user', value: email_pessoal } } });
-    await calendar.acl.insert({ calendarId: idLuiz, requestBody: { role: 'writer', scope: { type: 'user', value: email_luiz } } });
-
-    // 4. Permissões Vitinho
-    await calendar.acl.insert({ calendarId: idVit, requestBody: { role: 'owner', scope: { type: 'user', value: email_pessoal } } });
-    await calendar.acl.insert({ calendarId: idVit, requestBody: { role: 'writer', scope: { type: 'user', value: email_vitinho } } });
+    // 2. Aplicar permissões simultaneamente
+    await Promise.all([
+      calendar.acl.insert({ calendarId: idLuiz, requestBody: { role: 'owner', scope: { type: 'user', value: email_pessoal } } }),
+      calendar.acl.insert({ calendarId: idLuiz, requestBody: { role: 'writer', scope: { type: 'user', value: email_luiz } } }),
+      calendar.acl.insert({ calendarId: idVit, requestBody: { role: 'owner', scope: { type: 'user', value: email_pessoal } } }),
+      calendar.acl.insert({ calendarId: idVit, requestBody: { role: 'writer', scope: { type: 'user', value: email_vitinho } } })
+    ]);
 
     // 5. Salvar no Supabase
     const { error: dbError } = await supabase.from('studio_config').insert([

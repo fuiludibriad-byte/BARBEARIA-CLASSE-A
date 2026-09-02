@@ -491,7 +491,13 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     })
       .then(async (res) => {
         if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
+          const text = await res.text();
+          let errData;
+          try {
+            errData = JSON.parse(text);
+          } catch (e) {
+            errData = { message: `Vercel Error (${res.status}): ` + text.substring(0, 100) };
+          }
           throw errData;
         }
         return res.json();
