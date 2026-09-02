@@ -70,8 +70,8 @@ export default async function handler(req: any, res: any) {
     console.log(`Agendas isoladas criadas com sucesso.`);
     return res.status(201).json({
       success: true,
-      message: 'Agenda criada e compartilhada com sucesso!',
-      google_calendar_id: googleCalendarId,
+      message: 'Agendas criadas e compartilhadas com sucesso!',
+      google_calendar_id: idLuiz, // Or an array if needed, but the frontend doesn't use this response field
     });
   } catch (error: any) {
     console.error('Provisioning Error:', error);
