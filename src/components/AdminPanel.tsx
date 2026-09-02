@@ -502,7 +502,8 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
       })
       .catch((err) => {
         console.error("Error provisioning calendar:", err);
-        toast.error(err?.message || "Ocorreu um erro ao criar a agenda. Tente novamente.");
+        const errMsg = err?.message || err?.error || "Ocorreu um erro ao criar a agenda. Tente novamente.";
+        toast.error("Erro: " + errMsg);
         setIsProvisioning(false);
       });
   };

@@ -62,10 +62,11 @@ export default async function handler(req: any, res: any) {
     await calendar.acl.insert({ calendarId: idVit, requestBody: { role: 'writer', scope: { type: 'user', value: email_vitinho } } });
 
     // 5. Salvar no Supabase
-    await supabase.from('studio_config').insert([
+    const { error: dbError } = await supabase.from('studio_config').insert([
       { nome_do_estudio, email_pessoal, google_calendar_id: idLuiz, barber_id: 'luiz' },
       { nome_do_estudio, email_pessoal, google_calendar_id: idVit, barber_id: 'vitinho' }
     ]);
+    if (dbError) throw new Error("Erro no banco: " + dbError.message);
     
     console.log(`Agendas isoladas criadas com sucesso.`);
     return res.status(201).json({
