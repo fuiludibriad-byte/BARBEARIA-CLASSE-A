@@ -111,6 +111,7 @@ function getServicePrice(service: string): number {
 }
 
 export default async function handler(req: any, res: any) {
+  let activeCalendarId = '';
   // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -292,7 +293,7 @@ export default async function handler(req: any, res: any) {
         try {
           const { error } = await supabase
             .from('weekday_slots')
-            .insert([{ weekday, time, barber_id: barberId }], { onConflict: 'barber_id,weekday,time', ignoreDuplicates: true });
+            .upsert([{ weekday, time, barber_id: barberId }], { onConflict: 'barber_id,weekday,time', ignoreDuplicates: true });
           
           if (error) throw error;
           const updated = await getUpdatedSlots(barberId);
@@ -362,7 +363,7 @@ export default async function handler(req: any, res: any) {
               const inserts = times.map(time => ({ weekday: targetDay, time, barber_id: barberId }));
               const { error: insErr } = await supabase
                 .from('weekday_slots')
-                .insert(inserts, { onConflict: 'barber_id,weekday,time', ignoreDuplicates: true });
+                .upsert(inserts, { onConflict: 'barber_id,weekday,time', ignoreDuplicates: true });
               if (insErr) throw insErr;
             }
           }
@@ -479,7 +480,7 @@ export default async function handler(req: any, res: any) {
               const inserts = times.map(time => ({ selected_date: targetDate, time, barber_id: barberId }));
               const { error: insErr } = await supabase
                 .from('date_specific_slots')
-                .insert(inserts, { onConflict: 'barber_id,selected_date,time', ignoreDuplicates: true });
+                .upsert(inserts, { onConflict: 'barber_id,selected_date,time', ignoreDuplicates: true });
               if (insErr) throw insErr;
             }
           }
@@ -496,7 +497,7 @@ export default async function handler(req: any, res: any) {
       if (type === 'booking') {
         const id = booking.id;
         const eventId = id.replace(/-/g, '').toLowerCase();
-        const activeCalendarId = await getDynamicCalendarId(block.barberId || 'luiz');
+        activeCalendarId = await getDynamicCalendarId(booking?.barberId || 'luiz');
 
         const [d, m, y] = booking.date.split('/');
         const isoDate = `${y}-${m}-${d}`;
@@ -687,8 +688,9 @@ export default async function handler(req: any, res: any) {
         }
 
         // 2. Criar evento no Google Calendar para espelhamento
-        const activeCalendarId = await getDynamicCalendarId(booking.barberId || 'luiz');
+        activeCalendarId = await getDynamicCalendarId(booking.barberId || 'luiz');
         const title = `${booking.service} - ${booking.name}`;
+        activeCalendarId = await getDynamicCalendarId(booking.barberId || 'luiz');
         const barberName = booking.barberId === 'vitinho' ? 'Vitinho' : 'Luiz';
         const planoText = finalIsPlanUsage ? '\n[Pago via Assinatura]' : '';
         const description = `Cliente: ${booking.name}\nContato: ${booking.phone}\nValor: R$ ${finalPrice},00\nBarbeiro: ${barberName}${planoText}`;
@@ -742,6 +744,7 @@ export default async function handler(req: any, res: any) {
         let endDateTime: string;
         let duracao = 1440;
 
+        activeCalendarId = await getDynamicCalendarId(block.barberId || 'luiz');
         if (block.allDay) {
           startDateTime = `${isoDate}T00:00:00-03:00`;
           endDateTime = `${isoDate}T23:59:59-03:00`;
@@ -773,7 +776,7 @@ export default async function handler(req: any, res: any) {
         }
 
         // 2. Criar no Google Calendar
-        const activeCalendarId = await getDynamicCalendarId(block.barberId || 'luiz');
+        activeCalendarId = await getDynamicCalendarId(block.barberId || 'luiz');
         const title = `Bloqueio - ${block.reason || 'Indisponível'}`;
         let start: any;
         let end: any;
@@ -993,7 +996,7 @@ export default async function handler(req: any, res: any) {
         .eq('id', id)
         .select();
       const barberId = (delData && delData[0] && delData[0].barber_id) ? delData[0].barber_id : 'luiz';
-      const activeCalendarId = await getDynamicCalendarId(barberId);
+      activeCalendarId = await getDynamicCalendarId(barberId);
 
       if (deleteErr) throw deleteErr;
 
