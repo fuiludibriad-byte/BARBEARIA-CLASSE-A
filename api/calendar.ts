@@ -718,8 +718,14 @@ export default async function handler(req: any, res: any) {
               },
             },
           });
-        } catch (gErr) {
-          console.warn("Failsafe: Falha ao espelhar agendamento no Google Calendar:", gErr);
+        } catch (gErr: any) {
+          console.error("Google Calendar insert FAILED:", {
+            calendarId: activeCalendarId,
+            barberId: booking.barberId,
+            error: gErr?.message,
+            code: gErr?.code,
+            errors: gErr?.errors
+          });
         }
 
         return res.status(201).json({ success: true, eventId });
