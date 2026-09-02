@@ -584,11 +584,16 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
         if (Array.isArray(data.bookings)) {
           const active = data.bookings.filter((b: Booking) => b.status !== 'completed');
           const done = data.bookings.filter((b: Booking) => b.status === 'completed');
+
+          // Mescla concluídos da API com os do cache local, sem duplicatas
+          const existingCompleted = getCompleted();
+          const doneIds = new Set(done.map((b: Booking) => b.id));
+          const merged = [...done, ...existingCompleted.filter((b: Booking) => !doneIds.has(b.id))];
           
           saveBookings(active);
-          saveCompleted(done);
+          saveCompleted(merged);
           setBookings(active);
-          setCompleted(done);
+          setCompleted(merged);
         }
         if (Array.isArray(data.blocks)) {
           saveBlocks(data.blocks);

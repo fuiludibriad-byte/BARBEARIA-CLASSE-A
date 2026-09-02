@@ -161,8 +161,8 @@ export default async function handler(req: any, res: any) {
           console.warn("Supabase weekday_slots query warning:", err);
         }
       }
-      // Período de busca padrão: de 30 dias atrás até 90 dias no futuro
-      const timeMin = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+      // Período de busca padrão: de 12 meses atrás até 3 meses no futuro
+      const timeMin = new Date(now.getFullYear() - 1, now.getMonth(), 1).toISOString();
       const timeMax = new Date(now.getFullYear(), now.getMonth() + 3, 1).toISOString();
 
       if (req.query.realtime === 'true') {
