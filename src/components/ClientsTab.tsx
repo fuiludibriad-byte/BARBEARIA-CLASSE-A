@@ -19,7 +19,7 @@ export default function ClientsTab() {
       setLoading(true);
       try {
         const { data: subs } = await supabase.from('subscriptions').select('client_name, client_phone, created_at');
-        const { data: apps } = await supabase.from('appointments').select('name, phone, created_at');
+        const { data: apps } = await supabase.from('appointments').select('cliente_nome, cliente_telefone, created_at');
         
         const clientMap = new Map<string, Client>();
         
@@ -45,8 +45,8 @@ export default function ClientsTab() {
         // Process appointments
         if (apps) {
           apps.forEach(a => {
-            const name = (a.name || '').trim();
-            const phone = (a.phone || '').trim();
+            const name = (a.cliente_nome || '').trim();
+            const phone = (a.cliente_telefone || '').trim();
             if (!name) return;
             const key = phone || name;
             if (!clientMap.has(key)) {

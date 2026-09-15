@@ -82,7 +82,7 @@ function SubscriptionsTabContent({ authUser }: { authUser: any }) {
     const fetchClients = async () => {
       try {
         const { data: subs } = await supabase.from('subscriptions').select('client_name, client_phone');
-        const { data: apps } = await supabase.from('appointments').select('name, phone');
+        const { data: apps } = await supabase.from('appointments').select('cliente_nome, cliente_telefone');
         
         const clientMap = new Map<string, string>();
         
@@ -93,7 +93,7 @@ function SubscriptionsTabContent({ authUser }: { authUser: any }) {
         }
         if (apps) {
           apps.forEach(a => {
-            if (a.name) clientMap.set(a.name.trim(), a.phone || '');
+            if (a.cliente_nome) clientMap.set(a.cliente_nome.trim(), a.cliente_telefone || '');
           });
         }
         
