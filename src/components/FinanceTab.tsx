@@ -44,6 +44,7 @@ function FinanceTabContent() {
   const [editedCommissions, setEditedCommissions] = useState<Record<string, number>>({});
   const [savingCommission, setSavingCommission] = useState<string | null>(null);
   const [payingBarberId, setPayingBarberId] = useState<string | null>(null);
+  const [confirmingPayId, setConfirmingPayId] = useState<string | null>(null);
 
   const fetchFinance = async () => {
     setLoading(true);
@@ -357,7 +358,7 @@ function FinanceTabContent() {
               </div>
             </div>
             <div className="space-y-4">
-              {BARBERS.map(b => {
+              {BARBERS.filter(b => b.role !== 'owner').map(b => {
                 const stats = barberStats[b.id] || { grossAvulso: 0, grossPlanos: 0, commissionAvulso: 0, commissionPlanos: 0, net: 0, rate: 0.5 };
                 const totalGross = stats.grossAvulso + stats.grossPlanos;
                 const shopRetained = totalGross - (totalGross * stats.rate);
@@ -416,20 +417,34 @@ function FinanceTabContent() {
                       </div>
                       
                       {stats.net > 0 ? (
-                        <button
-                          onClick={() => handlePayRepasse(b.id)}
-                          disabled={payingBarberId === b.id}
-                          className="flex items-center gap-2 bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-black px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-[0_0_15px_-3px_#D4AF37]"
-                        >
-                          {payingBarberId === b.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <>
-                              <DollarSign className="w-4 h-4" />
-                              Fechar Caixa do Barbeiro
-                            </>
-                          )}
-                        </button>
+                        confirmingPayId === b.id ? (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setConfirmingPayId(null)}
+                              className="px-3 py-2 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={() => {
+                                setConfirmingPayId(null);
+                                handlePayRepasse(b.id);
+                              }}
+                              disabled={payingBarberId === b.id}
+                              className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-[0_0_15px_-3px_#22c55e]"
+                            >
+                              {payingBarberId === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirmar Pagamento"}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmingPayId(b.id)}
+                            className="flex items-center gap-2 bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-black px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-[0_0_15px_-3px_#D4AF37]"
+                          >
+                            <DollarSign className="w-4 h-4" />
+                            Fechar Caixa do Barbeiro
+                          </button>
+                        )
                       ) : (
                         <span className="text-xs text-muted-foreground italic flex items-center gap-1">
                           <CheckCircle2 className="w-4 h-4 text-green-500" /> Tudo pago
