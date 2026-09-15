@@ -7,11 +7,12 @@ import { toast } from 'sonner';
 import { User, Scissors, CalendarDays, TrendingUp, Settings, Plus, LogOut, CheckCircle, Clock, Trash2, Edit2, Loader2, RefreshCw, X, Sparkles, DollarSign, Gift, ArrowLeft, Check, Pencil, Phone, Search } from 'lucide-react';
 import SubscriptionsTab from './SubscriptionsTab';
 import FinanceTab from './FinanceTab';
+import ClientsTab from './ClientsTab';
 
 const REFUSE_REASONS = ['Imprevisto', 'Indisponibilidade', 'Problema pessoal', 'Horário não disponível'];
 
 type FilterType = 'today' | 'week' | 'month' | 'year';
-type TabType = 'bookings' | 'dashboard' | 'add' | 'settings' | 'slots' | 'finance' | 'subscriptions';
+type TabType = 'bookings' | 'dashboard' | 'add' | 'settings' | 'slots' | 'finance' | 'subscriptions' | 'clients';
 
 interface AdminPanelProps {
   onLogout: () => void;
@@ -1225,9 +1226,10 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     { key: 'slots', label: 'Horários', icon: <Clock className="w-4 h-4" /> },
     { key: 'add', label: 'Adicionar', icon: <Plus className="w-4 h-4" /> },
     { key: 'subscriptions', label: 'Planos', icon: <Gift className="w-4 h-4" /> },
+    { key: 'clients', label: 'Clientes', icon: <User className="w-4 h-4" /> },
     { key: 'finance', label: 'Caixa', icon: <DollarSign className="w-4 h-4" /> },
     { key: 'settings', label: 'Configurações', icon: <Settings className="w-4 h-4" /> },
-  ].filter(t => authUser?.role === 'owner' || t.key !== 'finance');
+  ].filter(t => authUser?.role === 'owner' || (t.key !== 'finance' && t.key !== 'clients'));
 
   return (
     <div className="min-h-screen bg-background">
@@ -2449,8 +2451,8 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
           )}
 
           {tab === 'finance' && <FinanceTab />}
-          
           {tab === 'subscriptions' && <SubscriptionsTab authUser={authUser} />}
+          {tab === 'clients' && <ClientsTab />}
         </div>
       </div>
     </div>
