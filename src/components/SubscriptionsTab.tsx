@@ -266,7 +266,6 @@ function SubscriptionsTabContent({ authUser }: { authUser: any }) {
   };
 
   const filteredSubscriptions = (subscriptions || []).filter(s => {
-    if (authUser?.role !== 'owner' && s.barber_id !== authUser?.id) return false;
     if (filterStatus !== 'all' && s.status !== filterStatus) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
