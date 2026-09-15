@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BARBERS, Subscription, Booking, BarberCommission } from '@/lib/types';
-import { DollarSign, UserCheck, Scissors, Loader2, Save } from 'lucide-react';
+import { DollarSign, UserCheck, Scissors, Loader2, Save, CheckCircle2 } from 'lucide-react';
 import React from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -177,11 +177,23 @@ function FinanceTabContent() {
 
   const calculateFinance = () => {
     let grossTotal = 0;
-    let netBarbers: Record<string, number> = {};
     let totalCommissions = 0;
 
+    type BarberStat = {
+      grossAvulso: number;
+      grossPlanos: number;
+      commissionAvulso: number;
+      commissionPlanos: number;
+      net: number; // pending total commission
+      rate: number;
+    };
+
+    let barberStats: Record<string, BarberStat> = {};
+
     // Inicializa barbeiros
-    BARBERS.forEach(b => netBarbers[b.id] = 0);
+    BARBERS.forEach(b => {
+      barberStats[b.id] = { grossAvulso: 0, grossPlanos: 0, commissionAvulso: 0, commissionPlanos: 0, net: 0, rate: 0 };
+    });
 
     const getBarberCommissionRate = (barberId: string) => {
       const editedRate = editedCommissions[barberId];
@@ -196,10 +208,10 @@ function FinanceTabContent() {
       return isNaN(cleanValue) ? 0 : cleanValue;
     };
 
-    // Soma agendamentos (apenas serviços avulsos, pois se for plano, a grana já entrou na venda do plano)
+    // Soma agendamentos
     (data.appointments || []).forEach(app => {
-      if (app.is_plan_usage) return; // Se foi pago com plano, o valor entrou na venda do plano, não agora
-      if (app.status !== 'completed' && app.status !== 'concluido') return; // Garantia extra no front-end
+      if (app.is_plan_usage) return;
+      if (app.status !== 'completed' && app.status !== 'concluido') return;
       
       const price = sanitizePrice(app);
       grossTotal += price;
@@ -209,16 +221,19 @@ function FinanceTabContent() {
       if (barber && price > 0) {
         const rate = getBarberCommissionRate(barber.id);
         const commission = price * rate;
-        totalCommissions += commission; // Lucro estúdio desconta todas as comissões geradas no período
+        totalCommissions += commission;
         
-        // Barbeiro só recebe o repasse pendente se não tiver sido acertado ainda (is_settled !== true)
+        barberStats[barber.id].grossAvulso += price;
+        barberStats[barber.id].rate = rate;
+        
         if (!(app as any).is_settled) {
-          netBarbers[barber.id] += commission;
+          barberStats[barber.id].commissionAvulso += commission;
+          barberStats[barber.id].net += commission;
         }
       }
     });
 
-    // Soma assinaturas vendidas
+    // Soma assinaturas
     (data.subscriptions || []).forEach(sub => {
       const price = sanitizePrice(sub);
       grossTotal += price;
@@ -227,19 +242,22 @@ function FinanceTabContent() {
       if (barber && price > 0) {
         const rate = getBarberCommissionRate(barber.id);
         const commission = price * rate;
-        totalCommissions += commission; // Lucro estúdio desconta todas as comissões geradas no período
+        totalCommissions += commission;
         
-        // Barbeiro só recebe o repasse pendente se não tiver sido acertado ainda (is_settled !== true)
+        barberStats[barber.id].grossPlanos += price;
+        barberStats[barber.id].rate = rate;
+        
         if (!(sub as any).is_settled) {
-          netBarbers[barber.id] += commission;
+          barberStats[barber.id].commissionPlanos += commission;
+          barberStats[barber.id].net += commission;
         }
       }
     });
 
-    return { grossTotal, netBarbers, shopRetention: grossTotal - totalCommissions };
+    return { grossTotal, barberStats, shopRetention: grossTotal - totalCommissions };
   };
 
-  const { grossTotal, netBarbers, shopRetention } = calculateFinance();
+  const { grossTotal, barberStats, shopRetention } = calculateFinance();
 
   return (
     <div className="p-4 space-y-6">
@@ -339,45 +357,89 @@ function FinanceTabContent() {
               </div>
             </div>
             <div className="space-y-4">
-              {BARBERS.map(b => (
-                <div key={b.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-border pb-3 last:border-0 last:pb-0 gap-3">
-                  <div className="flex items-center gap-3">
-                    <img src={b.image} alt={b.name} className="w-10 h-10 rounded-full object-cover" />
-                    <div>
-                      <span className="text-sm font-bold block">{b.name}</span>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <span className="text-xs text-muted-foreground">Repasse Acumulado: R$ {(netBarbers[b.id] || 0).toFixed(2)}</span>
-                        {(netBarbers[b.id] || 0) > 0 && (
-                          <button
-                            onClick={() => handlePayRepasse(b.id)}
-                            disabled={payingBarberId === b.id}
-                            className="text-[10px] bg-primary/20 hover:bg-primary/30 text-primary font-bold px-2 py-0.5 rounded-full transition-colors flex items-center gap-1 disabled:opacity-50"
-                          >
-                            {payingBarberId === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "💰 Pagar Repasse"}
-                          </button>
-                        )}
+              {BARBERS.map(b => {
+                const stats = barberStats[b.id] || { grossAvulso: 0, grossPlanos: 0, commissionAvulso: 0, commissionPlanos: 0, net: 0, rate: 0.5 };
+                const totalGross = stats.grossAvulso + stats.grossPlanos;
+                const shopRetained = totalGross - (totalGross * stats.rate);
+                
+                return (
+                  <div key={b.id} className="flex flex-col border border-border bg-black/20 rounded-xl p-4 gap-4">
+                    
+                    {/* Cabeçalho do Barbeiro */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <img src={b.image} alt={b.name} className="w-10 h-10 rounded-full object-cover" />
+                        <div>
+                          <span className="text-sm font-bold block">{b.name}</span>
+                          <span className="text-xs text-muted-foreground">Faturamento Gerado: R$ {totalGross.toFixed(2)}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          value={editedCommissions[b.id] !== undefined ? editedCommissions[b.id] : ((commissionsDb.find(c => c.barber_id === b.id)?.commission_percentage || 50))}
+                          onChange={(e) => setEditedCommissions(prev => ({ ...prev, [b.id]: Number(e.target.value) }))}
+                          className="w-16 bg-background border border-border rounded px-2 py-1 text-sm text-foreground text-center focus:border-primary outline-none"
+                        />
+                        <span className="text-xs text-muted-foreground">%</span>
+                        <button
+                          onClick={() => handleSaveCommission(b.id, b.name)}
+                          disabled={savingCommission === b.id}
+                          className="p-1.5 bg-primary/10 text-primary rounded hover:bg-primary/20 transition-colors"
+                          title="Salvar porcentagem"
+                        >
+                          {savingCommission === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                        </button>
                       </div>
                     </div>
+
+                    {/* Divisão de Valores */}
+                    <div className="grid grid-cols-2 gap-3 bg-black/40 p-3 rounded-lg border border-border/50">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Vendas da Semana</p>
+                        <p className="text-xs text-foreground">Avulsos: <span className="font-semibold text-primary">R$ {stats.grossAvulso.toFixed(2)}</span></p>
+                        <p className="text-xs text-foreground">Planos: <span className="font-semibold text-primary">R$ {stats.grossPlanos.toFixed(2)}</span></p>
+                      </div>
+                      <div className="border-l border-border/50 pl-3">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Divisão Final</p>
+                        <p className="text-xs text-foreground">Estúdio ({(100 - (stats.rate * 100)).toFixed(0)}%): <span className="font-semibold">R$ {shopRetained.toFixed(2)}</span></p>
+                        <p className="text-xs text-foreground">Repasse ({(stats.rate * 100).toFixed(0)}%): <span className="font-semibold text-primary">R$ {(totalGross * stats.rate).toFixed(2)}</span></p>
+                      </div>
+                    </div>
+
+                    {/* Repasse Pendente & Pagamento */}
+                    <div className="flex items-center justify-between pt-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Valor Pendente a Pagar</p>
+                        <p className="text-sm font-bold text-primary">R$ {stats.net.toFixed(2)}</p>
+                      </div>
+                      
+                      {stats.net > 0 ? (
+                        <button
+                          onClick={() => handlePayRepasse(b.id)}
+                          disabled={payingBarberId === b.id}
+                          className="flex items-center gap-2 bg-[#D4AF37] hover:bg-[#D4AF37]/90 text-black px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-[0_0_15px_-3px_#D4AF37]"
+                        >
+                          {payingBarberId === b.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <DollarSign className="w-4 h-4" />
+                              Fechar Caixa do Barbeiro
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground italic flex items-center gap-1">
+                          <CheckCircle2 className="w-4 h-4 text-green-500" /> Tudo pago
+                        </span>
+                      )}
+                    </div>
+
                   </div>
-                  <div className="flex items-center gap-2 bg-secondary p-1 rounded-lg">
-                    <input 
-                      type="number"
-                      value={editedCommissions[b.id] ?? 50}
-                      onChange={(e) => setEditedCommissions({...editedCommissions, [b.id]: Number(e.target.value)})}
-                      className="w-16 bg-background border border-border text-center rounded-md p-1 text-sm outline-none"
-                    />
-                    <span className="text-sm text-muted-foreground">%</span>
-                    <button 
-                      onClick={() => handleSaveCommission(b.id, b.name)}
-                      disabled={savingCommission === b.id}
-                      className="p-2 text-primary hover:bg-primary/10 rounded-md transition-colors"
-                      title="Salvar % de Comissão"
-                    >
-                      {savingCommission === b.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
