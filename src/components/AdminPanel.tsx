@@ -57,6 +57,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
   const [editBookingPrice, setEditBookingPrice] = useState<number>(0);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [cancellingBooking, setCancellingBooking] = useState<Booking | null>(null);
+  const [dashboardSubs, setDashboardSubs] = useState<any[]>([]);
 
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -597,6 +598,11 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
           saveBlocks(data.blocks);
           setBlocks(data.blocks);
         }
+
+        // Fetch subscriptions for dashboard calculation
+        supabase.from('subscriptions').select('*').then(({ data: subData }) => {
+          if (subData) setDashboardSubs(subData);
+        });
       })
       .catch((err) => {
         console.error("Error loading events from Google Calendar API:", err);
@@ -1078,7 +1084,12 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
       const date = new Date(y, m - 1, d);
       switch (filter) {
         case 'today': return date.toDateString() === now.toDateString();
-        case 'week': { const wa = new Date(now); wa.setDate(wa.getDate() - 7); return date >= wa; }
+        case 'week': { 
+          const startOfWeek = new Date(now);
+          startOfWeek.setDate(now.getDate() - now.getDay());
+          startOfWeek.setHours(0,0,0,0);
+          return date >= startOfWeek; 
+        }
         case 'month': return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
         case 'year': return date.getFullYear() === now.getFullYear();
         default: return true;
@@ -1086,12 +1097,43 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     });
   }, [completedForDashboard, filter]);
 
-  const totalRevenue = filteredCompleted.reduce((sum, b) => {
-    if (b.is_plan_usage) return sum;
-    const rawVal = b.price || (b as any).valor || 0;
-    const cleanVal = Number(String(rawVal).replace(',', '.'));
-    return sum + (isNaN(cleanVal) ? 0 : cleanVal);
-  }, 0);
+  const totalRevenue = useMemo(() => {
+    const bookingsRevenue = filteredCompleted.reduce((sum, b) => {
+      if (b.is_plan_usage) return sum;
+      const rawVal = b.price || (b as any).valor || 0;
+      const cleanVal = Number(String(rawVal).replace(',', '.'));
+      return sum + (isNaN(cleanVal) ? 0 : cleanVal);
+    }, 0);
+
+    const now = new Date();
+    const subsRevenue = dashboardSubs.reduce((sum, sub) => {
+      const targetBarber = authUser.role === 'owner' ? dashboardBarberFilter : authUser.id;
+      if (targetBarber !== 'all' && (sub.barber_id || 'luiz') !== targetBarber) return sum;
+
+      const date = new Date(sub.created_at);
+      let inDate = true;
+      switch (filter) {
+        case 'today': inDate = date.toDateString() === now.toDateString(); break;
+        case 'week': { 
+          const startOfWeek = new Date(now);
+          startOfWeek.setDate(now.getDate() - now.getDay());
+          startOfWeek.setHours(0,0,0,0);
+          inDate = date >= startOfWeek;
+          break;
+        }
+        case 'month': inDate = date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear(); break;
+        case 'year': inDate = date.getFullYear() === now.getFullYear(); break;
+      }
+
+      if (!inDate) return sum;
+
+      const rawVal = sub.price || 0;
+      const cleanVal = Number(String(rawVal).replace(',', '.'));
+      return sum + (isNaN(cleanVal) ? 0 : cleanVal);
+    }, 0);
+
+    return bookingsRevenue + subsRevenue;
+  }, [filteredCompleted, dashboardSubs, authUser, dashboardBarberFilter, filter]);
   const totalServices = filteredCompleted.length;
 
   const pendingCount = displayBookings.filter(b => b.status === 'pending').length;
