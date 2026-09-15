@@ -586,9 +586,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
           const done = data.bookings.filter((b: Booking) => b.status === 'completed');
 
           // Mescla concluídos da API com os do cache local, sem duplicatas
-          const existingCompleted = getCompleted();
-          const doneIds = new Set(done.map((b: Booking) => b.id));
-          const merged = [...done, ...existingCompleted.filter((b: Booking) => !doneIds.has(b.id))];
+          const merged = done;
           
           saveBookings(active);
           saveCompleted(merged);
@@ -1089,6 +1087,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
   }, [completedForDashboard, filter]);
 
   const totalRevenue = filteredCompleted.reduce((sum, b) => {
+    if (b.is_plan_usage) return sum;
     const rawVal = b.price || (b as any).valor || 0;
     const cleanVal = Number(String(rawVal).replace(',', '.'));
     return sum + (isNaN(cleanVal) ? 0 : cleanVal);
