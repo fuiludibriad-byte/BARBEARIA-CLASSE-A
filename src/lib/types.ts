@@ -61,7 +61,7 @@ export interface Barber {
   planCommissionRate: number;
 }
 
-export const BARBERS: Barber[] = [
+export const INITIAL_BARBERS: Barber[] = [
   {
     id: 'luiz',
     name: 'Luiz',
@@ -81,6 +81,15 @@ export const BARBERS: Barber[] = [
     planCommissionRate: 0.1
   },
   {
+    id: 'kaua',
+    name: 'Kauã Pimentel',
+    role: 'barber',
+    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
+    password: '0000',
+    serviceCommissionRate: 0.5,
+    planCommissionRate: 0.1
+  },
+  {
     id: 'dono',
     name: 'Jean (Dono)',
     role: 'owner',
@@ -90,6 +99,96 @@ export const BARBERS: Barber[] = [
     planCommissionRate: 1.0
   }
 ];
+
+const BARBERS_STORAGE_KEY = 'classea_barbers_list';
+
+export function getStoredBarbers(): Barber[] {
+  if (typeof window === 'undefined') return INITIAL_BARBERS;
+  try {
+    const raw = localStorage.getItem(BARBERS_STORAGE_KEY);
+    if (!raw) return INITIAL_BARBERS;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // Garante que o Kauã esteja presente mesmo se o localStorage tiver uma versão antiga salva
+      if (!parsed.some(b => b.id === 'kaua')) {
+        const kaua = INITIAL_BARBERS.find(b => b.id === 'kaua')!;
+        const donoIdx = parsed.findIndex(b => b.role === 'owner');
+        if (donoIdx >= 0) {
+          parsed.splice(donoIdx, 0, kaua);
+        } else {
+          parsed.push(kaua);
+        }
+        localStorage.setItem(BARBERS_STORAGE_KEY, JSON.stringify(parsed));
+      }
+      return parsed;
+    }
+  } catch (e) {
+    console.error('Erro ao ler barbeiros salvos:', e);
+  }
+  return INITIAL_BARBERS;
+}
+
+export function saveStoredBarbers(barbers: Barber[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(BARBERS_STORAGE_KEY, JSON.stringify(barbers));
+  } catch (e) {
+    console.error('Erro ao salvar barbeiros:', e);
+  }
+}
+
+export function addCustomBarber(newBarber: { name: string; password?: string; image?: string }): Barber {
+  const current = getStoredBarbers();
+  const slug = newBarber.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+  const id = slug || `barber_${Date.now()}`;
+  
+  const created: Barber = {
+    id,
+    name: newBarber.name.trim(),
+    role: 'barber',
+    image: newBarber.image?.trim() || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
+    password: newBarber.password?.trim() || '0000',
+    serviceCommissionRate: 0.5,
+    planCommissionRate: 0.1
+  };
+
+  const donoIdx = current.findIndex(b => b.role === 'owner');
+  if (donoIdx >= 0) {
+    current.splice(donoIdx, 0, created);
+  } else {
+    current.push(created);
+  }
+
+  saveStoredBarbers(current);
+  return created;
+}
+
+export function removeCustomBarber(id: string): void {
+  const current = getStoredBarbers();
+  const filtered = current.filter(b => b.id !== id || b.role === 'owner');
+  saveStoredBarbers(filtered);
+}
+
+export function getBarberName(id?: string): string {
+  if (!id) return 'Não atribuído';
+  const found = getStoredBarbers().find(b => b.id === id);
+  return found ? found.name : id;
+}
+
+export const BARBERS: Barber[] = new Proxy([] as Barber[], {
+  get(target, prop, receiver) {
+    const current = getStoredBarbers();
+    if (prop === 'length') return current.length;
+    if (typeof prop === 'string' && !isNaN(Number(prop))) {
+      return current[Number(prop)];
+    }
+    const val = (current as any)[prop];
+    if (typeof val === 'function') {
+      return val.bind(current);
+    }
+    return Reflect.get(current, prop, receiver);
+  }
+});
 
 export interface Subscription {
   id: string;

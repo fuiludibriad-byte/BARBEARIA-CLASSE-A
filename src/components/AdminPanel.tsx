@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Booking, SERVICES, generateWhatsAppUrl, formatPhone, ScheduleBlock, generateUUID } from '@/lib/types';
+import { Booking, SERVICES, generateWhatsAppUrl, formatPhone, ScheduleBlock, generateUUID, BARBERS, getBarberName } from '@/lib/types';
 import { getBookings, saveBookings, getCompleted, saveCompleted, addCompleted, removeCompleted, addBooking, getBlocks, saveBlocks, addBlock, removeBlock } from '@/lib/bookingStore';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -8,11 +8,12 @@ import { User, Scissors, CalendarDays, TrendingUp, Settings, Plus, LogOut, Check
 import SubscriptionsTab from './SubscriptionsTab';
 import FinanceTab from './FinanceTab';
 import ClientsTab from './ClientsTab';
+import BarbersTab from './BarbersTab';
 
 const REFUSE_REASONS = ['Imprevisto', 'Indisponibilidade', 'Problema pessoal', 'Horário não disponível'];
 
 type FilterType = 'today' | 'week' | 'month' | 'year';
-type TabType = 'bookings' | 'dashboard' | 'add' | 'settings' | 'slots' | 'finance' | 'subscriptions' | 'clients';
+type TabType = 'bookings' | 'dashboard' | 'add' | 'settings' | 'slots' | 'finance' | 'subscriptions' | 'clients' | 'barbers';
 
 interface AdminPanelProps {
   onLogout: () => void;
@@ -1228,8 +1229,9 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     { key: 'subscriptions', label: 'Planos', icon: <Gift className="w-4 h-4" /> },
     { key: 'clients', label: 'Clientes', icon: <User className="w-4 h-4" /> },
     { key: 'finance', label: 'Caixa', icon: <DollarSign className="w-4 h-4" /> },
+    { key: 'barbers', label: 'Equipe', icon: <Scissors className="w-4 h-4" /> },
     { key: 'settings', label: 'Configurações', icon: <Settings className="w-4 h-4" /> },
-  ].filter(t => authUser?.role === 'owner' || (t.key !== 'finance' && t.key !== 'clients'));
+  ].filter(t => authUser?.role === 'owner' || (t.key !== 'finance' && t.key !== 'clients' && t.key !== 'barbers'));
 
   return (
     <div className="min-h-screen bg-background">
@@ -1409,7 +1411,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                             </span>
                             {authUser.role === 'owner' && (
                               <span className="inline-flex items-center gap-1.5 text-xs bg-indigo-500/10 text-indigo-400 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
-                                👤 {a.barberId === 'vitinho' ? 'Vitinho' : 'Luiz'}
+                                👤 {getBarberName(a.barberId)}
                               </span>
                             )}
                           </div>
@@ -1474,7 +1476,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                             </span>
                             {authUser.role === 'owner' && (
                               <span className="inline-flex items-center gap-1.5 text-xs bg-indigo-500/10 text-indigo-400 px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
-                                👤 {bl.barberId === 'vitinho' ? 'Vitinho' : 'Luiz'}
+                                👤 {getBarberName(bl.barberId)}
                               </span>
                             )}
                           </div>
@@ -1507,8 +1509,9 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                     className="bg-background border border-primary/20 rounded-lg p-2 text-sm font-semibold outline-none focus:border-primary text-foreground"
                   >
                     <option value="all">Todos os Barbeiros</option>
-                    <option value="luiz">Luiz</option>
-                    <option value="vitinho">Vitinho</option>
+                    {BARBERS.filter(b => b.role === 'barber').map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
                   </select>
                 </div>
               )}
@@ -1655,8 +1658,9 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                     onChange={(e) => setManualBarberId(e.target.value)}
                     className="bg-background border border-primary/20 rounded-lg p-2 text-sm font-semibold outline-none focus:border-primary text-foreground"
                   >
-                    <option value="luiz">Luiz</option>
-                    <option value="vitinho">Vitinho</option>
+                    {BARBERS.filter(b => b.role === 'barber').map(b => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
                   </select>
                 </div>
               )}
@@ -1998,8 +2002,9 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
                       className="bg-background border border-primary/20 rounded-lg p-2 text-sm font-semibold outline-none focus:border-primary text-foreground"
                     >
                       <option value="all">Todos os Profissionais</option>
-                      <option value="luiz">Luiz</option>
-                      <option value="vitinho">Vitinho</option>
+                      {BARBERS.filter(b => b.role === 'barber').map(b => (
+                        <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
                     </select>
                   </div>
                 )}
@@ -2453,6 +2458,7 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
           {tab === 'finance' && <FinanceTab />}
           {tab === 'subscriptions' && <SubscriptionsTab authUser={authUser} />}
           {tab === 'clients' && <ClientsTab />}
+          {tab === 'barbers' && <BarbersTab />}
         </div>
       </div>
     </div>

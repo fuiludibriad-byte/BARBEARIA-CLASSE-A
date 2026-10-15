@@ -75,7 +75,7 @@ const Admin = () => {
           {!selectedBarberId ? (
             <div className="space-y-6">
               <p className="text-sm text-muted-foreground text-center">Selecione seu perfil para acessar:</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {BARBERS.map(b => (
                   <button
                     key={b.id}

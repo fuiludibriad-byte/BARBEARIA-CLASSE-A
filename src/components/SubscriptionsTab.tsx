@@ -49,6 +49,7 @@ function SubscriptionsTabContent({ authUser }: { authUser: any }) {
   const [loadingSubs, setLoadingSubs] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'active' | 'expired' | 'canceled' | 'all'>('active');
+  const [barberFilter, setBarberFilter] = useState<string>('all');
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   const selectedPlan = PLAN_OPTIONS.find(p => p.id === selectedPlanId);
@@ -266,6 +267,14 @@ function SubscriptionsTabContent({ authUser }: { authUser: any }) {
   };
 
   const filteredSubscriptions = (subscriptions || []).filter(s => {
+    // 1. Isolamento por barbeiro quando não for dono
+    if (authUser?.role !== 'owner' && s.barber_id !== authUser?.id) {
+      return false;
+    }
+    // 2. Filtro selecionado pelo dono
+    if (authUser?.role === 'owner' && barberFilter !== 'all' && s.barber_id !== barberFilter) {
+      return false;
+    }
     if (filterStatus !== 'all' && s.status !== filterStatus) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -409,10 +418,30 @@ function SubscriptionsTabContent({ authUser }: { authUser: any }) {
               <UserCheck className="w-6 h-6 text-primary" />
               Assinaturas e Planos
             </h2>
-            <p className="text-muted-foreground">Gerencie os planos ativos e dê baixa nos cortes</p>
+            <p className="text-muted-foreground text-sm">
+              {authUser?.role !== 'owner' 
+                ? `Exibindo apenas os seus planos mensais (${authUser?.name || 'Barbeiro'})` 
+                : 'Gerencie os planos ativos e dê baixa nos cortes'}
+            </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+            {authUser?.role === 'owner' && (
+              <div className="flex bg-secondary p-1 rounded-xl items-center">
+                <span className="text-[11px] text-muted-foreground font-semibold px-2">Barbeiro:</span>
+                <select
+                  value={barberFilter}
+                  onChange={(e) => setBarberFilter(e.target.value)}
+                  className="bg-background text-foreground text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-border outline-none focus:border-primary"
+                >
+                  <option value="all">Todos os Barbeiros</option>
+                  {BARBERS.filter(b => b.role === 'barber').map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input 
