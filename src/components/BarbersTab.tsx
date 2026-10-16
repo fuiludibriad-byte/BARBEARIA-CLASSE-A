@@ -1,13 +1,13 @@
-﻿import React, { useState } from 'react';
-import { Barber, getStoredBarbers, addCustomBarber, removeCustomBarber } from '@/lib/types';
+import React, { useState } from 'react';
+import { Barber, getStoredBarbers, addCustomBarber, removeCustomBarber, NO_PHOTO_AVATAR } from '@/lib/types';
 import { Scissors, Plus, Trash2, Key, Shield, Check, X, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 const DEFAULT_AVATARS = [
+  NO_PHOTO_AVATAR,
   'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
   'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80',
   'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400&auto=format&fit=crop&q=80',
 ];
 
 export default function BarbersTab() {
@@ -18,7 +18,7 @@ export default function BarbersTab() {
   // Form state
   const [name, setName] = useState('');
   const [password, setPassword] = useState('0000');
-  const [image, setImage] = useState(DEFAULT_AVATARS[0]);
+  const [image, setImage] = useState(NO_PHOTO_AVATAR);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const togglePasswordVisibility = (id: string) => {

@@ -442,7 +442,7 @@ const BookingSection = () => {
                   <h3 className="text-xl font-bold">Quem vai atender você?</h3>
                   <p className="text-sm text-muted-foreground mt-1">Selecione o seu barbeiro de preferência.</p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-4xl mx-auto">
                   {BARBERS.filter(b => b.role === 'barber').map((barber) => (
                     <button
                       key={barber.id}

@@ -61,6 +61,8 @@ export interface Barber {
   planCommissionRate: number;
 }
 
+export const NO_PHOTO_AVATAR = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' fill='%23121214'/%3E%3Ccircle cx='100' cy='76' r='36' fill='%2327272a'/%3E%3Cpath d='M38 174c0-34 26-52 62-52s62 18 62 52' fill='%2327272a'/%3E%3Ccircle cx='100' cy='100' r='96' fill='none' stroke='%23d4af37' stroke-opacity='0.3' stroke-width='3'/%3E%3C/svg%3E";
+
 export const INITIAL_BARBERS: Barber[] = [
   {
     id: 'luiz',
@@ -84,7 +86,7 @@ export const INITIAL_BARBERS: Barber[] = [
     id: 'kaua',
     name: 'Kauã Pimentel',
     role: 'barber',
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
+    image: NO_PHOTO_AVATAR,
     password: '0000',
     serviceCommissionRate: 0.5,
     planCommissionRate: 0.1
@@ -109,7 +111,8 @@ export function getStoredBarbers(): Barber[] {
     if (!raw) return INITIAL_BARBERS;
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      // Garante que o Kauã esteja presente mesmo se o localStorage tiver uma versão antiga salva
+      let changed = false;
+      // Garante que o Kauã esteja presente
       if (!parsed.some(b => b.id === 'kaua')) {
         const kaua = INITIAL_BARBERS.find(b => b.id === 'kaua')!;
         const donoIdx = parsed.findIndex(b => b.role === 'owner');
@@ -118,6 +121,17 @@ export function getStoredBarbers(): Barber[] {
         } else {
           parsed.push(kaua);
         }
+        changed = true;
+      }
+
+      // Se o Kauã estiver com a foto antiga do unsplash, remove a foto
+      const kauaItem = parsed.find(b => b.id === 'kaua');
+      if (kauaItem && kauaItem.image && kauaItem.image.includes('unsplash')) {
+        kauaItem.image = NO_PHOTO_AVATAR;
+        changed = true;
+      }
+
+      if (changed) {
         localStorage.setItem(BARBERS_STORAGE_KEY, JSON.stringify(parsed));
       }
       return parsed;
@@ -146,7 +160,7 @@ export function addCustomBarber(newBarber: { name: string; password?: string; im
     id,
     name: newBarber.name.trim(),
     role: 'barber',
-    image: newBarber.image?.trim() || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
+    image: newBarber.image?.trim() || NO_PHOTO_AVATAR,
     password: newBarber.password?.trim() || '0000',
     serviceCommissionRate: 0.5,
     planCommissionRate: 0.1
