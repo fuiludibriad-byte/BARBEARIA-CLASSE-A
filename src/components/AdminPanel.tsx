@@ -721,6 +721,15 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     setBookings(updated);
     setCompleted(getCompleted());
 
+    // Atualiza imediatamente no Supabase
+    supabase.from('appointments').update({
+      status: 'completed',
+      price: finalBooking.price,
+      is_plan_usage: finalBooking.is_plan_usage
+    }).eq('id', booking.id).then(({ error }) => {
+      if (error) console.error("Erro ao atualizar status para completed no Supabase:", error);
+    });
+
     // Sync status update to Google Calendar
     fetch('/api/calendar', {
       method: 'PUT',
@@ -964,6 +973,35 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
     const duration = matchingServices.length > 0 
       ? matchingServices.reduce((acc, curr) => acc + curr.time, 0)
       : 180;
+
+    // Converte e insere diretamente no Supabase para nunca se perder
+    try {
+      const parts = manualDate.split('/');
+      const isoDate = parts.length === 3 
+        ? `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+        : new Date().toISOString().split('T')[0];
+      const startDateTime = `${isoDate}T${manualTime}:00-03:00`;
+      const startMs = new Date(startDateTime).getTime();
+      const endDateTime = new Date(startMs + duration * 60 * 1000).toISOString();
+
+      supabase.from('appointments').insert({
+        id: booking.id,
+        cliente_nome: booking.name,
+        cliente_telefone: booking.phone,
+        servico_nome: booking.service,
+        duracao_minutos: duration,
+        data_hora_inicio: startDateTime,
+        data_hora_fim: endDateTime,
+        status: manualIsPast ? 'completed' : 'accepted',
+        barber_id: finalBarberId,
+        price: booking.price,
+        is_plan_usage: false
+      }).then(({ error }) => {
+        if (error) console.error("Erro ao salvar agendamento manual no Supabase:", error);
+      });
+    } catch (err) {
+      console.error("Erro ao processar data para Supabase:", err);
+    }
 
     // Função de limpeza do formulário - chamada independente do resultado da API
     const finalize = (isPastSnap: boolean) => {

@@ -1,7 +1,8 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Search, MessageCircle, Phone, User, Loader2, Edit2, Trash2, X, Check, Sparkles, Send, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, MessageCircle, Phone, User, Loader2, Edit2, Trash2, X, Check, Sparkles, Send, RefreshCw, ChevronDown, ChevronUp, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatPhone } from '@/lib/types';
 
 interface Client {
   name: string;
@@ -55,6 +56,52 @@ export default function ClientsTab() {
     phone: string;
   } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // New Client modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newClientName, setNewClientName] = useState('');
+  const [newClientPhone, setNewClientPhone] = useState('');
+  const [isSavingNew, setIsSavingNew] = useState(false);
+
+  const handleCreateClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClientName.trim()) {
+      toast.error('Informe o nome do cliente');
+      return;
+    }
+    const cleanPhone = newClientPhone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      toast.error('Informe o telefone do cliente');
+      return;
+    }
+
+    setIsSavingNew(true);
+    try {
+      const { error } = await supabase.from('appointments').insert({
+        cliente_nome: newClientName.trim(),
+        cliente_telefone: cleanPhone,
+        servico_nome: 'Cadastro Direto',
+        duracao_minutos: 30,
+        data_hora_inicio: new Date().toISOString(),
+        data_hora_fim: new Date().toISOString(),
+        status: 'completed',
+        price: 0
+      });
+
+      if (error) throw error;
+
+      toast.success(`Contato "${newClientName.trim()}" salvo com sucesso!`);
+      setNewClientName('');
+      setNewClientPhone('');
+      setShowAddModal(false);
+      await fetchClients();
+    } catch (err: any) {
+      console.error('Erro ao adicionar cliente:', err);
+      toast.error(err?.message || 'Erro ao salvar contato no banco de dados.');
+    } finally {
+      setIsSavingNew(false);
+    }
+  };
 
   const fetchClients = async () => {
     setLoading(true);
@@ -233,7 +280,13 @@ export default function ClientsTab() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="bg-primary/10 text-primary px-4 py-2 rounded-xl text-sm font-bold border border-primary/20 whitespace-nowrap text-center">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-sm transition-all hover:scale-105 active:scale-95 shadow-lg shadow-primary/20 whitespace-nowrap"
+          >
+            <UserPlus className="w-4 h-4" /> Novo Contato
+          </button>
+          <div className="bg-primary/10 text-primary px-4 py-2.5 rounded-xl text-sm font-bold border border-primary/20 whitespace-nowrap text-center">
             {clients.length} Clientes
           </div>
           {contactedPhones.size > 0 && (
@@ -484,6 +537,70 @@ export default function ClientsTab() {
                 {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4" /> Salvar</>}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Adicionar Novo Contato */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-card border border-border shadow-2xl rounded-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
+            <div className="p-4 border-b border-border flex justify-between items-center">
+              <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-primary" />
+                Adicionar Novo Contato
+              </h3>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                className="text-muted-foreground hover:text-foreground p-1 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateClient} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-muted-foreground mb-1.5 font-semibold">Nome do Cliente *</label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={newClientName}
+                  onChange={e => setNewClientName(e.target.value)}
+                  placeholder="Ex: João Silva"
+                  className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-muted-foreground mb-1.5 font-semibold">Telefone (WhatsApp) *</label>
+                <input
+                  type="tel"
+                  required
+                  value={newClientPhone}
+                  onChange={e => setNewClientPhone(formatPhone(e.target.value))}
+                  placeholder="(41) 99999-9999"
+                  className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-sm text-foreground focus:border-primary outline-none transition-colors"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                O contato será salvo permanentemente na sua base de clientes e na contagem de contatos.
+              </p>
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-muted-foreground hover:bg-secondary transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingNew || !newClientName.trim() || !newClientPhone.trim()}
+                  className="flex-1 bg-primary text-primary-foreground py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-all disabled:opacity-50"
+                >
+                  {isSavingNew ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4" /> Salvar Contato</>}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

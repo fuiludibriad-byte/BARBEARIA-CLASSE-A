@@ -86,7 +86,7 @@ export const INITIAL_BARBERS: Barber[] = [
     id: 'kaua',
     name: 'Kauã Pimentel',
     role: 'barber',
-    image: NO_PHOTO_AVATAR,
+    image: '/barbers/kaua.jpg',
     password: '0000',
     serviceCommissionRate: 0.5,
     planCommissionRate: 0.1
@@ -124,10 +124,10 @@ export function getStoredBarbers(): Barber[] {
         changed = true;
       }
 
-      // Se o Kauã estiver com a foto antiga do unsplash, remove a foto
+      // Atualiza a imagem do Kauã para a foto oficial enviada pelo estúdio
       const kauaItem = parsed.find(b => b.id === 'kaua');
-      if (kauaItem && kauaItem.image && kauaItem.image.includes('unsplash')) {
-        kauaItem.image = NO_PHOTO_AVATAR;
+      if (kauaItem && kauaItem.image !== '/barbers/kaua.jpg') {
+        kauaItem.image = '/barbers/kaua.jpg';
         changed = true;
       }
 
