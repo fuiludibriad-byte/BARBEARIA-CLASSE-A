@@ -74,24 +74,6 @@ export const INITIAL_BARBERS: Barber[] = [
     planCommissionRate: 0.1
   },
   {
-    id: 'vitinho',
-    name: 'Vitinho',
-    role: 'barber',
-    image: 'https://i.imgur.com/LuzBTyK.jpeg',
-    password: '8888',
-    serviceCommissionRate: 0.5,
-    planCommissionRate: 0.1
-  },
-  {
-    id: 'kaua',
-    name: 'Kauã Pimentel',
-    role: 'barber',
-    image: '/barbers/kaua.jpg',
-    password: '0000',
-    serviceCommissionRate: 0.5,
-    planCommissionRate: 0.1
-  },
-  {
     id: 'dono',
     name: 'Jean (Dono)',
     role: 'owner',
@@ -109,25 +91,26 @@ export function getStoredBarbers(): Barber[] {
   try {
     const raw = localStorage.getItem(BARBERS_STORAGE_KEY);
     if (!raw) return INITIAL_BARBERS;
-    const parsed = JSON.parse(raw);
+    let parsed: Barber[] = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.length > 0) {
       let changed = false;
-      // Garante que o Kauã esteja presente
-      if (!parsed.some(b => b.id === 'kaua')) {
-        const kaua = INITIAL_BARBERS.find(b => b.id === 'kaua')!;
-        const donoIdx = parsed.findIndex(b => b.role === 'owner');
-        if (donoIdx >= 0) {
-          parsed.splice(donoIdx, 0, kaua);
-        } else {
-          parsed.push(kaua);
-        }
+
+      // Kauã e Vitinho não fazem mais parte do time -> remover do cache
+      const prevLength = parsed.length;
+      parsed = parsed.filter(b => b.id !== 'kaua' && b.id !== 'vitinho');
+      if (parsed.length !== prevLength) {
         changed = true;
       }
 
-      // Atualiza a imagem do Kauã para a foto oficial enviada pelo estúdio
-      const kauaItem = parsed.find(b => b.id === 'kaua');
-      if (kauaItem && kauaItem.image !== '/barbers/kaua.jpg') {
-        kauaItem.image = '/barbers/kaua.jpg';
+      // Garante que o Luiz e o Dono permaneçam disponíveis se a lista tiver ficado vazia
+      if (!parsed.some(b => b.id === 'luiz')) {
+        const luiz = INITIAL_BARBERS.find(b => b.id === 'luiz')!;
+        parsed.unshift(luiz);
+        changed = true;
+      }
+      if (!parsed.some(b => b.id === 'dono')) {
+        const dono = INITIAL_BARBERS.find(b => b.id === 'dono')!;
+        parsed.push(dono);
         changed = true;
       }
 
@@ -142,10 +125,41 @@ export function getStoredBarbers(): Barber[] {
   return INITIAL_BARBERS;
 }
 
+export async function syncBarbersFromApi(): Promise<Barber[]> {
+  try {
+    const res = await fetch('/api/finance?action=get_barbers');
+    if (!res.ok) return getStoredBarbers();
+    const data = await res.json();
+    if (Array.isArray(data.barbers) && data.barbers.length > 0) {
+      // Higieniza para garantir que Kauã e Vitinho não voltem
+      let cleaned: Barber[] = data.barbers.filter((b: Barber) => b.id !== 'kaua' && b.id !== 'vitinho');
+      if (!cleaned.some(b => b.id === 'luiz')) {
+        cleaned.unshift(INITIAL_BARBERS[0]);
+      }
+      if (!cleaned.some(b => b.id === 'dono')) {
+        cleaned.push(INITIAL_BARBERS[1]);
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(BARBERS_STORAGE_KEY, JSON.stringify(cleaned));
+      }
+      return cleaned;
+    }
+  } catch (e) {
+    // Silently fall back to localStorage
+  }
+  return getStoredBarbers();
+}
+
 export function saveStoredBarbers(barbers: Barber[]): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(BARBERS_STORAGE_KEY, JSON.stringify(barbers));
+    // Sincroniza com o Supabase para refletir nos aparelhos de todos os clientes
+    fetch('/api/finance?action=save_barbers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ barbers })
+    }).catch(err => console.error('Erro ao sincronizar barbeiros com API:', err));
   } catch (e) {
     console.error('Erro ao salvar barbeiros:', e);
   }

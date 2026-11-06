@@ -1296,23 +1296,23 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-primary/10 sticky top-[68px] md:top-[76px] bg-background/80 backdrop-blur-xl z-10">
+        <div className="flex overflow-x-auto scrollbar-none border-b border-primary/10 sticky top-[68px] md:top-[76px] bg-background/90 backdrop-blur-xl z-10 px-2 sm:px-4">
           {tabs.map(t => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-medium transition-all relative ${
-                tab === t.key ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              className={`flex-shrink-0 flex items-center justify-center gap-2 px-3.5 sm:px-4 py-3.5 text-xs sm:text-sm font-medium whitespace-nowrap transition-all relative ${
+                tab === t.key ? 'text-primary font-bold' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {t.icon}
-              <span className="hidden sm:inline">{t.label}</span>
+              <span className="inline">{t.label}</span>
               {t.badge !== undefined && t.badge > 0 && (
-                <span className="bg-primary text-primary-foreground text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                <span className="bg-primary text-primary-foreground text-[10px] font-bold rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center">
                   {t.badge}
                 </span>
               )}
-              {tab === t.key && <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-primary rounded-full" />}
+              {tab === t.key && <div className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-full" />}
             </button>
           ))}
         </div>
@@ -2315,6 +2315,26 @@ const AdminPanel = ({ onLogout }: AdminPanelProps) => {
           {/* ===== SETTINGS TAB ===== */}
           {tab === 'settings' && (
             <div className="space-y-6 max-w-md mx-auto animate-in fade-in duration-300">
+              {authUser.role === 'owner' && (
+                <div className="bg-card/80 backdrop-blur-xl p-6 rounded-2xl border border-primary/20 shadow-lg space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                      <Scissors className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-foreground">Equipe e Funcionários</h3>
+                      <p className="text-xs text-muted-foreground">Cadastre novos barbeiros ou remova funcionários da barbearia</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setTab('barbers')}
+                    className="w-full py-3 bg-primary text-primary-foreground font-bold rounded-xl text-xs transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shadow-md shadow-primary/20"
+                  >
+                    <Scissors className="w-4 h-4" /> Gerenciar Barbeiros (Adicionar / Remover)
+                  </button>
+                </div>
+              )}
+
               <div className="bg-card/80 backdrop-blur-xl p-6 md:p-8 rounded-2xl border border-primary/10 shadow-[0_0_0_1px_rgba(255,255,255,0.05),0_20px_50px_-15px_rgba(0,0,0,0.5)] space-y-6">
                 <div>
                   <h3 className="text-lg font-bold text-foreground mb-1">Vincular Google Agenda</h3>

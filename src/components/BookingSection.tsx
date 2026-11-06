@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { SERVICES, isDayAllowed, WHATSAPP_NUMBER, generateWhatsAppUrl, formatPhone, getBookingDuration, ScheduleBlock, BARBERS, Booking, ClientSubscription } from '@/lib/types';
+import { SERVICES, isDayAllowed, WHATSAPP_NUMBER, generateWhatsAppUrl, formatPhone, getBookingDuration, ScheduleBlock, BARBERS, Barber, getStoredBarbers, syncBarbersFromApi, Booking, ClientSubscription } from '@/lib/types';
 import { addBooking, getBookings, getBlocks } from '@/lib/bookingStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar } from '@/components/ui/calendar';
@@ -33,6 +33,19 @@ const BookingSection = () => {
   const [activeSubscription, setActiveSubscription] = useState<ClientSubscription | null>(null);
   const [useSubscription, setUseSubscription] = useState(false);
   const [isCheckingSubscription, setIsCheckingSubscription] = useState(false);
+
+  // Lista dinâmica e reativa de barbeiros
+  const [barbersList, setBarbersList] = useState<Barber[]>(() => getStoredBarbers());
+
+  useEffect(() => {
+    syncBarbersFromApi().then(updated => {
+      if (updated && updated.length > 0) {
+        setBarbersList(updated);
+      }
+    });
+  }, []);
+
+  const activeBarbers = useMemo(() => barbersList.filter(b => b.role === 'barber'), [barbersList]);
 
   const totalDuration = useMemo(() => {
     if (!selectedService) return 0;
@@ -213,10 +226,10 @@ const BookingSection = () => {
     if (selectedBarberId !== 'qualquer') {
       setAvailableTimes(getAvailableSlotsForBarber(selectedBarberId));
     } else {
-      const luizSlots = getAvailableSlotsForBarber('luiz');
-      const vitinhoSlots = getAvailableSlotsForBarber('vitinho');
-      // Union of both barbers slots
-      const unionSlots = Array.from(new Set([...luizSlots, ...vitinhoSlots]));
+      const activeIds = activeBarbers.map(b => b.id);
+      const allSlots = activeIds.flatMap(id => getAvailableSlotsForBarber(id));
+      // Union of active barbers slots
+      const unionSlots = Array.from(new Set(allSlots));
       // Sort chronologically
       unionSlots.sort((a, b) => {
         const [ha, ma] = a.split(':').map(Number);
@@ -225,7 +238,7 @@ const BookingSection = () => {
       });
       setAvailableTimes(unionSlots);
     }
-  }, [selectedDate, selectedService, extras, totalDuration, googleBookings, googleBlocks, weekdaySlots, dateSlots, selectedBarberId]);
+  }, [selectedDate, selectedService, extras, totalDuration, googleBookings, googleBlocks, weekdaySlots, dateSlots, selectedBarberId, activeBarbers]);
 
   // Combined service name and price
   const combinedServiceName = useMemo(() => {
@@ -274,12 +287,8 @@ const BookingSection = () => {
     // Resolve barber ID if "qualquer" is selected
     let finalBarberId = selectedBarberId;
     if (selectedBarberId === 'qualquer') {
-      const luizSlots = getAvailableSlotsForBarber('luiz');
-      if (luizSlots.includes(selectedTime)) {
-        finalBarberId = 'luiz';
-      } else {
-        finalBarberId = 'vitinho';
-      }
+      const candidate = activeBarbers.find(b => getAvailableSlotsForBarber(b.id).includes(selectedTime));
+      finalBarberId = candidate ? candidate.id : (activeBarbers[0]?.id || 'luiz');
     }
 
     const dateStr = format(selectedDate, 'dd/MM/yyyy');
@@ -440,49 +449,85 @@ const BookingSection = () => {
               <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }}>
                 <div className="text-center mb-8">
                   <h3 className="text-xl font-bold">Quem vai atender você?</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Selecione o seu barbeiro de preferência.</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {activeBarbers.length === 1
+                      ? 'Barbeiro oficial pronto para te atender.'
+                      : 'Selecione o seu barbeiro de preferência.'}
+                  </p>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-4xl mx-auto">
-                  {BARBERS.filter(b => b.role === 'barber').map((barber) => (
+
+                {activeBarbers.length <= 1 ? (
+                  /* Apenas 1 barbeiro ativo: Oculta "Qualquer Um" e centraliza o barbeiro oficial */
+                  <div className="flex justify-center max-w-xs sm:max-w-sm mx-auto">
+                    {activeBarbers.map((barber) => (
+                      <button
+                        key={barber.id}
+                        onClick={() => {
+                          setSelectedBarberId(barber.id);
+                          setStep(2);
+                        }}
+                        className={cn(
+                          "w-full flex flex-col items-center p-8 rounded-2xl border transition-all text-center group bg-secondary/40 border-primary/30 hover:border-primary hover:shadow-xl hover:shadow-primary/10 hover:scale-[1.02]",
+                          selectedBarberId === barber.id && "border-primary bg-secondary/80 shadow-lg"
+                        )}
+                      >
+                        <img
+                          src={barber.image}
+                          alt={barber.name}
+                          className="w-28 h-28 md:w-36 md:h-36 object-cover object-[center_15%] rounded-full border-2 border-primary/40 group-hover:border-primary group-hover:scale-105 transition-transform duration-300 shadow-md"
+                        />
+                        <h4 className="font-bold text-xl mt-4 text-foreground">{barber.name}</h4>
+                        <p className="text-xs text-primary font-bold mt-1 uppercase tracking-wider">Barbeiro Oficial</p>
+                        <span className="mt-4 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold group-hover:bg-primary group-hover:text-primary-foreground transition-all">
+                          Escolher Horário →
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  /* Múltiplos barbeiros ativos: Exibe a grade e a opção "Qualquer Um" */
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-4xl mx-auto">
+                    {activeBarbers.map((barber) => (
+                      <button
+                        key={barber.id}
+                        onClick={() => {
+                          setSelectedBarberId(barber.id);
+                          setStep(2);
+                        }}
+                        className={cn(
+                          "flex flex-col items-center p-6 rounded-2xl border transition-all text-center group",
+                          selectedBarberId === barber.id ? "border-primary bg-secondary/80 shadow-lg" : "border-border hover:border-primary/50 bg-secondary/30"
+                        )}
+                      >
+                        <img
+                          src={barber.image}
+                          alt={barber.name}
+                          className="w-24 h-24 md:w-32 md:h-32 object-cover object-[center_15%] rounded-full border border-border group-hover:scale-105 transition-transform duration-300 shadow-sm"
+                        />
+                        <h4 className="font-bold text-lg mt-4">{barber.name}</h4>
+                        <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider">Barbeiro Oficial</p>
+                      </button>
+                    ))}
                     <button
-                      key={barber.id}
                       onClick={() => {
-                        setSelectedBarberId(barber.id);
+                        setSelectedBarberId('qualquer');
                         setStep(2);
                       }}
                       className={cn(
-                        "flex flex-col items-center p-6 rounded-2xl border transition-all text-center group",
-                        selectedBarberId === barber.id ? "border-primary bg-secondary/80 shadow-lg" : "border-border hover:border-primary/50 bg-secondary/30"
+                        "flex flex-col items-center p-6 rounded-2xl border transition-all text-center group bg-secondary/30",
+                        selectedBarberId === 'qualquer' ? "border-primary bg-secondary/80 shadow-lg" : "border-border hover:border-primary/50"
                       )}
                     >
                       <img
-                        src={barber.image}
-                        alt={barber.name}
+                        src="https://i.imgur.com/Vs3Oba1.jpeg"
+                        alt="Qualquer Um"
                         className="w-24 h-24 md:w-32 md:h-32 object-cover object-[center_15%] rounded-full border border-border group-hover:scale-105 transition-transform duration-300 shadow-sm"
                       />
-                      <h4 className="font-bold text-lg mt-4">{barber.name}</h4>
-                      <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider">Barbeiro Oficial</p>
+                      <h4 className="font-bold text-lg mt-4">Qualquer Um</h4>
+                      <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider">Primeiro Disponível</p>
                     </button>
-                  ))}
-                  <button
-                    onClick={() => {
-                      setSelectedBarberId('qualquer');
-                      setStep(2);
-                    }}
-                    className={cn(
-                      "flex flex-col items-center p-6 rounded-2xl border transition-all text-center group bg-secondary/30",
-                      selectedBarberId === 'qualquer' ? "border-primary bg-secondary/80 shadow-lg" : "border-border hover:border-primary/50"
-                    )}
-                  >
-                    <img
-                      src="https://i.imgur.com/Vs3Oba1.jpeg"
-                      alt="Qualquer Um"
-                      className="w-24 h-24 md:w-32 md:h-32 object-cover object-[center_15%] rounded-full border border-border group-hover:scale-105 transition-transform duration-300 shadow-sm"
-                    />
-                    <h4 className="font-bold text-lg mt-4">Qualquer Um</h4>
-                    <p className="text-xs text-muted-foreground mt-1 uppercase tracking-wider">Primeiro Disponível</p>
-                  </button>
-                </div>
+                  </div>
+                )}
               </motion.div>
             )}
 

@@ -171,6 +171,46 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ success: true });
     }
 
+    if (req.method === 'GET' && action === 'get_barbers') {
+      const { data, error } = await supabase
+        .from('studio_config')
+        .select('nome_do_estudio')
+        .eq('email_pessoal', 'barbers_team_config')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Erro ao buscar barbers_team_config:', error);
+        return res.status(200).json({ barbers: null });
+      }
+
+      if (data?.nome_do_estudio) {
+        try {
+          const parsed = JSON.parse(data.nome_do_estudio);
+          return res.status(200).json({ barbers: parsed });
+        } catch (e) {
+          return res.status(200).json({ barbers: null });
+        }
+      }
+      return res.status(200).json({ barbers: null });
+    }
+
+    if (req.method === 'POST' && action === 'save_barbers') {
+      const { barbers } = req.body;
+      if (!Array.isArray(barbers)) {
+        return res.status(400).json({ error: 'Barbers array required' });
+      }
+      await supabase.from('studio_config').delete().eq('email_pessoal', 'barbers_team_config');
+      const { error } = await supabase.from('studio_config').insert({
+        email_pessoal: 'barbers_team_config',
+        nome_do_estudio: JSON.stringify(barbers),
+        barber_id: 'team_sync'
+      });
+      if (error) throw error;
+      return res.status(200).json({ success: true });
+    }
+
     return res.status(404).json({ error: 'Action not found' });
   } catch (err: any) {
     console.error('Finance API error:', err);

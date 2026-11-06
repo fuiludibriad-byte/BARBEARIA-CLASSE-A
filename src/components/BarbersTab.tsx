@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Barber, getStoredBarbers, addCustomBarber, removeCustomBarber, NO_PHOTO_AVATAR } from '@/lib/types';
-import { Scissors, Plus, Trash2, Key, Shield, Check, X, Eye, EyeOff } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Barber, getStoredBarbers, syncBarbersFromApi, addCustomBarber, removeCustomBarber, NO_PHOTO_AVATAR } from '@/lib/types';
+import { Scissors, Plus, Trash2, Key, Shield, Check, X, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const DEFAULT_AVATARS = [
@@ -13,7 +13,17 @@ const DEFAULT_AVATARS = [
 export default function BarbersTab() {
   const [barbers, setBarbers] = useState<Barber[]>(() => getStoredBarbers());
   const [showAddModal, setShowAddModal] = useState(false);
+  const [barberToRemove, setBarberToRemove] = useState<Barber | null>(null);
   const [showPasswords, setShowPasswords] = useState<Record<string, boolean>>({});
+
+  // Sincroniza equipe do backend ao abrir
+  useEffect(() => {
+    syncBarbersFromApi().then(updated => {
+      if (updated && updated.length > 0) {
+        setBarbers(updated);
+      }
+    });
+  }, []);
 
   // Form state
   const [name, setName] = useState('');
@@ -54,23 +64,23 @@ export default function BarbersTab() {
     }
   };
 
-  const handleRemove = (barber: Barber) => {
-    if (barber.role === 'owner') {
+  const handleConfirmRemove = () => {
+    if (!barberToRemove) return;
+    if (barberToRemove.role === 'owner') {
       toast.error('O perfil do proprietário (Dono) não pode ser removido.');
-      return;
-    }
-
-    if (!window.confirm(`Tem certeza que deseja remover ${barber.name} da equipe?\n\nO barbeiro não conseguirá mais acessar o painel e não aparecerá para novos agendamentos.`)) {
+      setBarberToRemove(null);
       return;
     }
 
     try {
-      removeCustomBarber(barber.id);
+      removeCustomBarber(barberToRemove.id);
       setBarbers(getStoredBarbers());
-      toast.success(`Barbeiro ${barber.name} removido da equipe.`);
+      toast.success(`Barbeiro ${barberToRemove.name} removido da equipe com sucesso!`);
     } catch (err) {
       console.error(err);
       toast.error('Erro ao remover barbeiro');
+    } finally {
+      setBarberToRemove(null);
     }
   };
 
@@ -173,7 +183,7 @@ export default function BarbersTab() {
 
                 {!isOwner ? (
                   <button
-                    onClick={() => handleRemove(b)}
+                    onClick={() => setBarberToRemove(b)}
                     className="flex items-center gap-1.5 text-xs text-destructive hover:text-destructive/80 font-bold px-3 py-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
                     title="Remover barbeiro"
                   >
@@ -187,6 +197,57 @@ export default function BarbersTab() {
           );
         })}
       </div>
+
+      {/* Modal de Confirmação de Remoção de Barbeiro */}
+      {barberToRemove && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-card border border-destructive/30 shadow-2xl rounded-3xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 p-6 space-y-5 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-destructive/15 text-destructive flex items-center justify-center mx-auto border border-destructive/20">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+
+            <div>
+              <h3 className="font-bold text-lg text-foreground">Remover Funcionário?</h3>
+              <p className="text-xs text-muted-foreground mt-2">
+                Tem certeza que deseja remover <strong className="text-foreground">{barberToRemove.name}</strong> da equipe?
+              </p>
+            </div>
+
+            <div className="flex items-center justify-center gap-3 p-3 bg-secondary/50 rounded-2xl border border-border">
+              <img
+                src={barberToRemove.image}
+                alt={barberToRemove.name}
+                className="w-12 h-12 rounded-xl object-cover object-[center_15%]"
+              />
+              <div className="text-left">
+                <p className="text-sm font-bold text-foreground">{barberToRemove.name}</p>
+                <p className="text-xs text-muted-foreground font-mono">ID: {barberToRemove.id}</p>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-muted-foreground/80 leading-relaxed">
+              O profissional não conseguirá mais entrar no painel e seu nome deixará de aparecer para novos agendamentos no site.
+            </p>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setBarberToRemove(null)}
+                className="flex-1 py-3 rounded-xl text-xs font-bold text-muted-foreground hover:bg-secondary transition-colors border border-border"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRemove}
+                className="flex-1 py-3 bg-destructive text-destructive-foreground rounded-xl text-xs font-bold hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-destructive/20"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Confirmar Remoção
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Adicionar Novo Barbeiro */}
       {showAddModal && (
